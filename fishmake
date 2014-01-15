@@ -162,8 +162,9 @@ def add_version(AppSrc, Config):
 
 	VsnTuple = pyerl.PyErlTuple()
 	VsnTuple.appendChild(pyerl.PyErlAtom("vsn"))
-	VsnTuple.appendChild(pyerl.PyErlAtom(Config["Version"]))
+	VsnTuple.appendChild(pyerl.PyErlString(Config["Version"]))
 	ArgList.appendChild(VsnTuple)
+	return AppSrc
 
 ## gen_app_src(dct()) -> [string()]
 ## Looks in each app dir for a $APP.app.src file
@@ -177,14 +178,14 @@ def gen_app_src(Config):
 		AppFish = AppDir + "/src/" + App + ".app.fish"
 		AppSrc  = AppDir + "/src/" + App + ".app.src"
 		AppFile = AppDir + "/ebin/" + App + ".app"
-		Generated.append(AppSrc)
+		#Generated.append(AppSrc)
 		if not os.path.isfile(AppFish):
 			Generated.append(AppFile)
 			File = open(AppSrc, "w")
 			File.write(pyerl.write(default_app_src(App, Config)))
 			File.close()
 		else:
-			Base = pyerl.parse(AppFish)
+			Base = pyerl.parse_file(AppFish)
 			## The .fish file is a base configuration.
 			## We need to generate and append some default valeus to it
 			## such as build number, and, uh, others to be determined...
