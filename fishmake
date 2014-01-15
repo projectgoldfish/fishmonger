@@ -48,8 +48,11 @@ def get_minor_version():
 	Branch   = shell_text("git rev-parse --abbrev-ref HEAD").strip()
 	Branches = shell_text("git branch | grep -v \*")
 	Command  = "git log --oneline " + Branch
-	for RemBranch in Branches:
-		Command += " ^" + RemBranch
+	if isinstance(Branches, str):
+		Command += " ^" + Branches
+	else:
+		for RemBranch in Branches:
+			Command += " ^" + RemBranch
 	Command += " --no-merges | wc -l"
 	return shell_text(Command).strip()
 
