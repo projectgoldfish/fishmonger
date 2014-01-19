@@ -157,7 +157,7 @@ def add_version(AppSrc, Config):
 	
 	## If a vsn has already been specified leave it.
 	for Term in ArgList:
-		if Term[0].getValue == "vsn":
+		if hasattr(Term, '__iter__') and Term[0].getValue == "vsn":
 			return
 
 	VsnTuple = pyerl.PyErlTuple()
@@ -178,7 +178,7 @@ def gen_app_src(Config):
 		AppFish = AppDir + "/src/" + App + ".app.fish"
 		AppSrc  = AppDir + "/src/" + App + ".app.src"
 		AppFile = AppDir + "/ebin/" + App + ".app"
-		#Generated.append(AppSrc)
+		Generated.append(AppSrc)
 		if not os.path.isfile(AppFish):
 			Generated.append(AppFile)
 			File = open(AppSrc, "w")
@@ -197,7 +197,7 @@ def gen_app_src(Config):
 def gen_config_file(Config):
 	AppDirs     = get_dirs("apps", Config["SourceDir"])
 	Doc         = pyerl.PyErlDocument()
-	Expressions = []
+	Expressions = pyerl.PyErlList()
 	ConfigFile  = Config["InstallDir"] + "/etc/" + Config["MainApp"] + ".config.default"
 	for AppDir in AppDirs:
 		App       = os.path.basename(AppDir)
@@ -205,8 +205,9 @@ def gen_config_file(Config):
 		print "Parsing ", AppConfig
 		if os.path.isfile(AppConfig):
 			Terms = pyerl.parse_file(AppConfig)
-			Expressions += Terms.getElementsByTagName("expression")
-	Doc.setValue(Expressions)
+			Expressions.appendChild(Terms)
+
+	Doc.appendChild(Expressions)
 	pyerl.write_file(ConfigFile, Doc)
 
 ## gen_cookie(dict()) -> None
@@ -230,9 +231,13 @@ def gen_shell_script(Config):
 	FileName   = InstallDir + "/bin/" + Config["AppName"]
 	ErlDirs    = InstallDir + "/lib/erlang/lib/*/ebin"
 	ErlDeps    = InstallDir + "/lib/erlang/lib/*/debs/*/ebin"
+	ConfigFile = InstallDir + "/etc/" + Config["AppName"] + ".config"
+
+	Execute    = "-eval \"application:start(" + Config["AppName"] + ")\""
+
 	File       = open(FileName, "w")
 	File.write("#! /bin/bash\n")
-	File.write("erl -pa " + ErlDirs + " -pa " + ErlDeps + " -name " + Config["AppName"] +  "@`hostname -f` -setcookie \"`cat " + CookieFile + "`\"")
+	File.write("erl -pa " + ErlDirs + " -pa " + ErlDeps + " -name " + Config["AppName"] +  "@`hostname -f` -setcookie \"`cat " + CookieFile + "`\" -config " + ConfigFile +  " " + Execute)
 	File.close()
 	shell("chmod a+x " + FileName)
 	
