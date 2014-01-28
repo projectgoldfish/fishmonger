@@ -59,6 +59,9 @@ def get_minor_version():
 def get_version():
 	return "%s.%s" % (get_major_version(), get_minor_version())
 
+def get_id():
+	return shell_text("git log -n 1 | head -n 1").strip()[6:].strip()
+
 ## make_dir_absolute(string()) -> string()
 ## Takes the directory and assures it's an absolute path.
 def make_dir_absolute(Dir):
@@ -166,6 +169,20 @@ def add_version(AppSrc, Config):
 	ArgList.appendChild(VsnTuple)
 	return AppSrc
 
+def add_id(AppSrc, Config):
+	ArgList = AppSrc.getElementsByTagName("list")[0]
+	
+	## If a vsn has already been specified leave it.
+	for Term in ArgList:
+		if hasattr(Term, '__iter__') and Term[0].getValue == "id":
+			return
+
+	VsnTuple = pyerl.PyErlTuple()
+	VsnTuple.appendChild(pyerl.PyErlAtom("id"))
+	VsnTuple.appendChild(pyerl.PyErlString(Config["Id"]))
+	ArgList.appendChild(VsnTuple)
+	return AppSrc
+
 ## gen_app_src(dct()) -> [string()]
 ## Looks in each app dir for a $APP.app.src file
 ## Generates a default one if it does not exist.
@@ -190,6 +207,7 @@ def gen_app_src(Config):
 			## We need to generate and append some default valeus to it
 			## such as build number, and, uh, others to be determined...
 			Base = add_version(Base, Config)
+			Base = add_id(Base, Config)
 			pyerl.write_file(AppSrc, Base)
 
 	return Generated
@@ -375,7 +393,8 @@ def interpret_cli():
 		"AppName"         : False,
 		"MainApp"         : False,
 		"Cookie"          : False,
-		"Version"         : get_version()
+		"Version"         : get_version(),
+		"Id"              : get_id()
 	}
 
 	for Arg in sys.argv:
