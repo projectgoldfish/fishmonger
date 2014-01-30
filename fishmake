@@ -232,6 +232,12 @@ def gen_config_file(Config):
 ## Generates the cookie file
 def gen_cookie(Config):
 	FileName = make_dir_absolute(Config["InstallDir"] + "/var/run/.cookie")
+	
+	try:
+		os.remove(FileName)
+	except OSError, e:
+		pass
+
 	File     = open(FileName, "w")
 	File.write(Config["Cookie"])
 	File.close()
@@ -364,7 +370,6 @@ def install(Config):
 				shell("rm -rf " + LibDir + "/" + App + "/" + ErlDir)
 				shutil.copytree(  AppDir + "/" + ErlDir, LibDir + "/" + App + "/" + ErlDir)
 	print "==> Binaries copied"
-
 	print "==> Generating scripts"
 	gen_shell_script(Config)
 	gen_shell_connect_script(Config)
@@ -374,7 +379,7 @@ def install(Config):
 	print "==> Cookie baked"
 	print "==> Generating configuration file"
 	gen_config_file(Config)
-	print "==> Configuration filr generated"
+	print "==> Configuration file generated"
 	print "==> Reticulating splines"
 	print "==> Splines reticulated"
 
