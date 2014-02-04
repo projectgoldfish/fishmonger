@@ -102,6 +102,20 @@ def get_dirs(Type, SourceDir):
 				IncludeDirs.append(make_dir_absolute(Dir))
 		return IncludeDirs
 
+def make_repo_tuple(Repository):
+	RepoTuple    = pyerl.PyErlTuple()
+	RepoTuple.appendChild(pyerl.PyErlAtom(Repository["Type"]))
+	RepoTuple.appendChild(pyerl.PyErlString(Repository["URL"]))
+	if "Branch" in Repository:
+		if type(Repository["Branch"]) is dict:
+			BranchTuple    = pyerl.PyErlTuple()
+			BranchTuple.appendChild(pyerl.PyErlAtom(Repository["Branch"]["Type"]))
+			BranchTuple.appendChild(pyerl.PyErlString(Repository["Branch"]["Revision"]))
+			RepoTuple.appendChild(BranchTuple)
+		else:
+			RepoTuple.appendChild(pyerl.PyErlString(Repository["Branch"]))
+	return RepoTuple
+
 ## gen_rebar_config(list()) -> string()
 ## Takes a list of directories to build and returns the text for the rebar 
 ## config file.
@@ -114,25 +128,46 @@ def gen_rebar_config(Config):
 	#AppDirs     = make_dirs_absolute(AppDirs)
 	IncludeDirs = make_dirs_absolute(IncludeDirs)
 
-	Output += "{sub_dirs,\n\t[\n"
+	Expressions = []
+
+	SubDirs    = pyerl.PyErlTuple()
+	SubDirs.appendChild(pyerl.PyErlAtom("sub_dirs"))
+	SubDirs.appendChild(pyerl.PyErlList())
 	for AppDir in AppDirs:
-		Output += "\t\t\"" + AppDir + "\",\n"
+		SubDirs[1].appendChild(pyerl.PyErlString(AppDir))
+	Expressions.append(SubDirs)
 
-	Output = Output[:-2]
-	Output += "\n\t]\n}.\n"
-
-	Output += "{erl_opts, \n\t[\n"
+	ErlOpts    = pyerl.PyErlTuple()
+	ErlOpts.appendChild(pyerl.PyErlAtom("erl_opts"))
+	ErlOpts.appendChild(pyerl.PyErlList())
 	for IncludeDir in IncludeDirs:
-		Output += "\t\t{i, \"" + IncludeDir + "\"},\n"
+		IncludeTuple = pyerl.PyErlTuple()
+		IncludeTuple.appendChild(pyerl.PyErlAtom("i"))
+		IncludeTuple.appendChild(pyerl.PyErlString(IncludeDir))
+		ErlOpts[1].appendChild(IncludeTuple)
+	ErlOpts[1].appendChild(pyerl.PyErlAtom("debug_info"))
+	ErlOpts[1].appendChild(pyerl.PyErlAtom("fail_on_warning"))
+	Expressions.append(ErlOpts)
 
-	Output += "\t\tdebug_info,\n"
-	Output += "\t\tfail_on_warning,\n"
+	Required = pyerl.PyErlTuple()
+	Required.appendChild(pyerl.PyErlAtom("require_otp_vsn"))
+	Required.appendChild(pyerl.PyErlString("R" + Config["ErlVersion"]))
+	Expressions.append(Required)
 
-	Output = Output[:-2]
-	Output += "\n\t]\n"
-	Output += "}.\n"
-
-	Output += "{require_otp_vsn, \"R" + Config["ErlVersion"] + "\"}.\n"
+	Deps    = pyerl.PyErlTuple()
+	Deps.appendChild(pyerl.PyErlAtom("deps"))
+	Deps.appendChild(pyerl.PyErlList())
+	for Dep in Config["ExternalDependencies"]:
+		DepTuple = pyerl.PyErlTuple()
+		DepTuple.appendChild(pyerl.PyErlAtom(Dep["Name"]))
+		DepTuple.appendChild(pyerl.PyErlString(Dep["Version"]))
+		DepTuple.appendChild(make_repo_tuple(Dep["Repository"]))
+		Deps[1].appendChild(DepTuple)
+	Expressions.append(Deps)
+	
+	Output = ""
+	for Expression in Expressions:
+		Output += Expression.to_string() + ".\n"
 
 	return Output
 
@@ -220,7 +255,6 @@ def gen_config_file(Config):
 	for AppDir in AppDirs:
 		App       = os.path.basename(AppDir)
 		AppConfig = AppFile = AppDir + "/etc/" + App + ".config"
-		print "Parsing ", AppConfig
 		if os.path.isfile(AppConfig):
 			Terms = pyerl.parse_file(AppConfig)
 			Expressions.appendChild(Terms)
@@ -313,6 +347,7 @@ def compile(RebarConfig, Config):
 	TmpFiles = gen_app_src(Config)
 	TmpFiles.append(RebarConfigFile)
 
+	Res  = shell("rebar --config " + RebarConfigFile + " get-deps")
 	Res  = shell("rebar --config " + RebarConfigFile + " compile")
 
 	del_files(TmpFiles)
@@ -333,6 +368,7 @@ def clean(RebarConfig, Config):
 	TmpFiles.append(RebarConfigFile)
 
 	Res  = shell("rebar --config " + RebarConfigFile + " clean")
+	Res  = shell("rebar --config " + RebarConfigFile + " delete-deps")
 
 	del_files(TmpFiles)
 	return Res
@@ -370,6 +406,16 @@ def install(Config):
 				shell("rm -rf " + LibDir + "/" + App + "/" + ErlDir)
 				shutil.copytree(  AppDir + "/" + ErlDir, LibDir + "/" + App + "/" + ErlDir)
 	print "==> Binaries copied"
+	print "==> Copying dependencies"
+	## Create the Dependencies
+	AppDirs    = get_dirs("apps", "deps")
+	for AppDir in AppDirs:
+		App = os.path.basename(AppDir) + "-" + Config["Version"]
+		for ErlDir in ErlDirs:
+			if os.path.exists(AppDir + "/" + ErlDir):
+				shell("rm -rf " + LibDir + "/" + App + "/" + ErlDir)
+				shutil.copytree(  AppDir + "/" + ErlDir, LibDir + "/" + App + "/" + ErlDir)
+	print "==> Dependencies copied"
 	print "==> Generating scripts"
 	gen_shell_script(Config)
 	gen_shell_connect_script(Config)
@@ -386,7 +432,7 @@ def install(Config):
 ## interpret_cli() -> {command, dict()}
 ## Converts the cli arguements into config options
 ## and determines the command to run.
-def interpret_cli():
+def interpret_cli(Config):
 	Command = "compile"
 	Dict    = {
 		"RebarConfigFile" : ".rebar.config",
@@ -399,17 +445,28 @@ def interpret_cli():
 		"MainApp"         : False,
 		"Cookie"          : False,
 		"Version"         : get_version(),
-		"Id"              : get_id()
+		"Id"              : get_id(),
+		"ExternalDependencies" : []
 	}
+
+	Updated = []
 
 	for Arg in sys.argv:
 		if "=" in Arg:
 			Split = Arg.split("=")
 			Dict[Split[0]] = Split[1]
+			Updated.append(Split[0])
 		else:
 			Command = Arg
 
-	return (Command, Dict)
+	for Key in Dict:
+		if Key not in Config:
+			Config[Key] = Dict[Key]
+
+	for Update in Updated:
+		Config[Update] = Dict[Update]
+
+	return (Command, Config)
 
 ## usage() -> None
 ## Prints usage information to screen
@@ -462,7 +519,7 @@ def main(Command, Config):
 	return 0
 
 
-(Command, Config) = interpret_cli()
+(Command, Config) = interpret_cli(Config)
 main(Command, Config)
 
 
