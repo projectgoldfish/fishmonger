@@ -410,7 +410,7 @@ def install(Config):
 	## Create the Dependencies
 	AppDirs    = get_dirs("apps", "deps")
 	for AppDir in AppDirs:
-		App = os.path.basename(AppDir) + "-" + Config["Version"]
+		App = os.path.basename(AppDir)
 		for ErlDir in ErlDirs:
 			if os.path.exists(AppDir + "/" + ErlDir):
 				shell("rm -rf " + LibDir + "/" + App + "/" + ErlDir)
