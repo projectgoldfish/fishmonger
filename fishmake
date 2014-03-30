@@ -32,7 +32,6 @@ def shell(Command):
 	Proc.wait()
 	return Proc.returncode
 
-
 def shell_text(Command):
 	Proc = subprocess.Popen(Command, shell=True, stdout=subprocess.PIPE)
 	Proc.wait()
@@ -77,6 +76,18 @@ def make_dirs_absolute(Dirs):
 	for Dir in Dirs:
 		Directories.append(make_dir_absolute(Dir))
 	return Directories
+
+def copytree(Src, Dst):
+	for File in os.listdir(Src):
+		SrcFile = os.path.join(Src, File)
+		DstFile = os.path.join(Dst, File)
+		if os.path.isdir(SrcFile):
+			if os.path.isdir(DstFile):
+				copytree(SrcFile, DstFile)
+			else:
+				shutil.copytree(SrcFile, DstFile)
+		else:
+			shutil.copy2(SrcFile, DstFile)
 
 ## get_sub_dirs(string()) -> [string()]
 ## 
@@ -387,7 +398,11 @@ def install(Config):
 	AppDirs    = get_dirs("apps", Config["SourceDir"])
 	InstallDir = make_dir_absolute(Config["InstallDir"])
 	LibDir     = InstallDir + "/lib/erlang/lib"
-
+	print "==> Copying content"
+	for AppDir in AppDirs:
+		if os.path.exists(AppDir + "/var"):
+			copytree(AppDir + "/var", InstallDir + "/var")
+	print "==> Content copied"
 	print "==> Copying binaries"
 	## Create the base install directory
 	for NIXDir in NIXDirs:
