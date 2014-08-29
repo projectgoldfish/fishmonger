@@ -1,540 +1,423 @@
 #! /usr/bin/python
-## FishMake
-## System to generate a config file for rebar.
-## 
-## All subdirectories in the "ESRC" directory will be compiled under
-## rebar. These directories are expected to be standard OTP style apps.
-##
-## Once the rebar configuration is generated rebar is run with it.
-## 
-## The built files are then moved into the INSTALL_DIR in typical app format.
-## For a directory ESRC/dir all beam and app files are moved to 
-## INSTALL_DIR/lib/erlang/lib/dir/ebin.
-##
-## The contents of ESRC/etc will be concatenated with all ESRC/etc into a config
-## file named MAIN_APP.config.
-##
-## A shell script will be generated named MAIN_APP-start. This will start the erlang
-## shell with all libraries built and start MAIN_APP
-import os, os.path, sys, subprocess, shutil, pyerl
 
-execfile("fishmake.config")
+from   pybase.config import Config as PyConfig
+import pybase.util   as PyUtil
+import pybase.dir    as PyDir
+import pybase.git    as PyGit
 
+import pyerl         as PyErl
 
-## parse_application(string) -> (string(), string(), dict())
-## Parse an erlang application .app file
+import os, os.path, sys, subprocess, shutil
 
+## Directories found in a built erlang src dir.
+ErlDirs    = ["doc", "ebin", "priv"]
 
-## shell(string()) -> integer()
-## Run a system command and return the result code.
-def shell(Command):
-	Proc = subprocess.Popen(Command, shell=True)
-	Proc.wait()
-	return Proc.returncode
+## Directories that a built app should contain.
+NIXDirs    = ["bin", "doc", "etc", "lib", "lib/erlang/lib", "log", "sbin", "var", "var/run"]
 
-def shell_text(Command):
-	Proc = subprocess.Popen(Command, shell=True, stdout=subprocess.PIPE)
-	Proc.wait()
-	Output = ""
-	for Line in Proc.stdout:
-		Output += Line
-	return Output.strip()
+## Initialize config
+PyConfig.init("fishmake.config", {
+	"INCLUDE_DIRS"      : os.getenv("ERL_INCLUDE_DIRS",  "."),
+	"SOURCE_DIR"        : os.getenv("ERL_SRC_DIR",       "esrc"),
+	"ERL_VERSION"       : os.getenv("ERL_VERSION",       "16"),
 
-def get_major_version():
-	return shell_text("git rev-parse --abbrev-ref HEAD").strip()
+	"INSTALL_DIR"       : os.getenv("INSTALL_DIR",       "install"),
+	"REBAR_CONFIG_FILE" : os.getenv("REBAR_CONFIG",      ".rebar.config"),
+	
+	"APP_NAME"          : False,
+	"APP_MAIN"          : False,
+	
+	"VERSION"           : PyGit.getVersion(),
+	"ID"                : PyGit.getId(),
 
-def get_minor_version():
-	Branch   = shell_text("git rev-parse --abbrev-ref HEAD").strip()
-	Branches = shell_text("git branch | grep -v \*")
-	Command  = "git log --oneline " + Branch
-	if isinstance(Branches, str):
-		Command += " ^" + Branches
-	else:
-		for RemBranch in Branches:
-			Command += " ^" + RemBranch
-	Command += " --no-merges | wc -l"
-	return shell_text(Command).strip()
+	"APP_DIRS"          : [],
+	"EXT_DEPS"          : [],
+	"MODULE_DIRS"       : [],	
 
-def get_version():
-	return "%s.%s" % (get_major_version(), get_minor_version())
+	"REBAR_CONFIG"      : "",
+	"COOKIE"            : ""
+})
 
-def get_id():
-	return shell_text("git log -n 1 | head -n 1").strip()[6:].strip()
+def del_files(tmp_files):
+	for t_file in tmp_files:
+		if os.path.isfile(t_file):
+			os.remove(t_file)
 
-## make_dir_absolute(string()) -> string()
-## Takes the directory and assures it's an absolute path.
-def make_dir_absolute(Dir):
-	if Dir[0] == "/":
-		return Dir
-	else:
-		return os.getcwd() + "/" + Dir
+def getAppDirs(root = PyConfig["SOURCE_DIR"]):
+	app_dirs = []
+	(root, dirs, files) = os.walk(root).next()
+	for dir in dirs:
+		if dir[0] != ".":
+			app_dirs.append(PyDir.makeDirAbsolute(root + "/" + dir))
+	return app_dirs
 
-## make dirs_absolute([string()]) -> [string()]
-## Makes the list or directories absolute.
-def make_dirs_absolute(Dirs):
-	Directories = []
-	for Dir in Dirs:
-		Directories.append(make_dir_absolute(Dir))
-	return Directories
-
-def copytree(Src, Dst):
-	for File in os.listdir(Src):
-		SrcFile = os.path.join(Src, File)
-		DstFile = os.path.join(Dst, File)
-		if os.path.isdir(SrcFile):
-			if os.path.isdir(DstFile):
-				copytree(SrcFile, DstFile)
-			else:
-				shutil.copytree(SrcFile, DstFile)
-		else:
-			shutil.copy2(SrcFile, DstFile)
-
-## get_sub_dirs(string()) -> [string()]
-## 
-def get_app_dirs(SourceDir):
-	AppDirs = []
-	(Root, Dirs, Files) = os.walk(SourceDir).next()
-	for Dir in Dirs:
-		if Dir[0] != ".":
-			AppDirs.append(Root + "/" + Dir)
-	return AppDirs
-
-
-## get_include_dirs(string()) -> [string()]
-## Look in the directory specified and find any include directories
-## off of it.
-def get_dirs(Type, SourceDir):
-	if Type == "apps":
-		return get_app_dirs(SourceDir)
+def getDirs(type, root = PyConfig["SOURCE_DIR"]):
+	if type == "apps":
+		return getAppDirs(root)
 	else:	
-		IncludeDirs = []
-		for (Dir, A, B) in os.walk(SourceDir):
-			if Type in Dir:
-				IncludeDirs.append(make_dir_absolute(Dir))
-		return IncludeDirs
+		dirs = []
+		for (dir, a, b) in os.walk(root):
+			if type in dir:
+				dirs.append(PyDir.makeDirAbsolute(dir))
+		return dirs
 
-def make_repo_tuple(Repository):
-	RepoTuple    = pyerl.PyErlTuple()
-	RepoTuple.appendChild(pyerl.PyErlAtom(Repository["Type"]))
-	RepoTuple.appendChild(pyerl.PyErlString(Repository["URL"]))
-	if "Branch" in Repository:
-		if type(Repository["Branch"]) is dict:
-			BranchTuple    = pyerl.PyErlTuple()
-			BranchTuple.appendChild(pyerl.PyErlAtom(Repository["Branch"]["Type"]))
-			BranchTuple.appendChild(pyerl.PyErlString(Repository["Branch"]["Revision"]))
-			RepoTuple.appendChild(BranchTuple)
+def makeRepoTuple(repository):
+	repo_tuple    = PyErl.PyErlTuple()
+	repo_tuple.appendChild(PyErl.PyErlAtom(repository["Type"]))
+	repo_tuple.appendChild(PyErl.PyErlString(repository["URL"]))
+	if "Branch" in repository:
+		if type(repository["Branch"]) is dict:
+			branch_tuple    = PyErl.PyErlTuple()
+			branch_tuple.appendChild(PyErl.PyErlAtom(repository["Branch"]["Type"]))
+			branch_tuple.appendChild(PyErl.PyErlString(repository["Branch"]["Revision"]))
+			repo_tuple.appendChild(branch_tuple)
 		else:
-			RepoTuple.appendChild(pyerl.PyErlString(Repository["Branch"]))
-	return RepoTuple
+			repo_tuple.appendChild(PyErl.PyErlString(repository["Branch"]))
+	return repo_tuple
 
-## gen_rebar_config(list()) -> string()
+## generateRebarConfig() -> string()
 ## Takes a list of directories to build and returns the text for the rebar 
 ## config file.
-def gen_rebar_config(Config):
-	Output      = ""
+def generateRebarConfig():
+	output      = ""
 
-	AppDirs     = get_dirs("apps",    Config["SourceDir"])
-	IncludeDirs = get_dirs("include", Config["SourceDir"])
+	expressions = []
 
-	#AppDirs     = make_dirs_absolute(AppDirs)
-	IncludeDirs = make_dirs_absolute(IncludeDirs)
+	src_dirs    = PyErl.term("{sub_dirs, []}.")
+	print src_dirs
+	print src_dirs.to_string()
+	print src_dirs[1]
+	for app_dir in PyConfig["APP_DIRS"]:
+		src_dirs[1].appendChild(PyErl.PyErlString(app_dir))
+	expressions.append(src_dirs)
 
-	Expressions = []
+	erl_opts    = PyErl.term("{erl_opts, []}.")
+	for include_dir in PyConfig["INCLUDE_DIRS"]:
+		include_tuple = PyErl.term("{i, \"" + include_dir + "\"}.")
+		erl_opts[1].appendChild(include_tuple)
+	erl_opts[1].appendChild(PyErl.PyErlAtom("debug_info"))
+	erl_opts[1].appendChild(PyErl.PyErlAtom("fail_on_warning"))
+	expressions.append(erl_opts)
 
-	SubDirs    = pyerl.PyErlTuple()
-	SubDirs.appendChild(pyerl.PyErlAtom("sub_dirs"))
-	SubDirs.appendChild(pyerl.PyErlList())
-	for AppDir in AppDirs:
-		SubDirs[1].appendChild(pyerl.PyErlString(AppDir))
-	Expressions.append(SubDirs)
+	required = PyErl.term("{require_otp_vsn, " + "\"R" + PyConfig["ERL_VERSION"] + "\"}.")
+	expressions.append(required)
 
-	ErlOpts    = pyerl.PyErlTuple()
-	ErlOpts.appendChild(pyerl.PyErlAtom("erl_opts"))
-	ErlOpts.appendChild(pyerl.PyErlList())
-	for IncludeDir in IncludeDirs:
-		IncludeTuple = pyerl.PyErlTuple()
-		IncludeTuple.appendChild(pyerl.PyErlAtom("i"))
-		IncludeTuple.appendChild(pyerl.PyErlString(IncludeDir))
-		ErlOpts[1].appendChild(IncludeTuple)
-	ErlOpts[1].appendChild(pyerl.PyErlAtom("debug_info"))
-	ErlOpts[1].appendChild(pyerl.PyErlAtom("fail_on_warning"))
-	Expressions.append(ErlOpts)
-
-	Required = pyerl.PyErlTuple()
-	Required.appendChild(pyerl.PyErlAtom("require_otp_vsn"))
-	Required.appendChild(pyerl.PyErlString("R" + Config["ErlVersion"]))
-	Expressions.append(Required)
-
-	Deps    = pyerl.PyErlTuple()
-	Deps.appendChild(pyerl.PyErlAtom("deps"))
-	Deps.appendChild(pyerl.PyErlList())
-	for Dep in Config["ExternalDependencies"]:
-		DepTuple = pyerl.PyErlTuple()
-		DepTuple.appendChild(pyerl.PyErlAtom(Dep["Name"]))
-		DepTuple.appendChild(pyerl.PyErlString(Dep["Version"]))
-		DepTuple.appendChild(make_repo_tuple(Dep["Repository"]))
-		Deps[1].appendChild(DepTuple)
-	Expressions.append(Deps)
+	deps    = PyErl.term("{deps, []}.")
+	for dep in PyConfig["EXT_DEPS"]:
+		dep_tuple = PyErl.PyErlTuple()
+		dep_tuple.appendChild(PyErl.PyErlAtom(dep["Name"]))
+		dep_tuple.appendChild(PyErl.PyErlString(dep["Version"]))
+		dep_tuple.appendChild(makeRepoTuple(dep["Repository"]))
+		deps[1].appendChild(dep_tuple)
+	expressions.append(deps)
 	
-	Output = ""
-	for Expression in Expressions:
-		Output += Expression.to_string() + ".\n"
+	output = ""
+	for expression in expressions:
+		output += expression.to_string() + ".\n"
 
-	return Output
+	return output
 
-def default_app_src(App, Config):
-	Doc   = pyerl.PyErlDocument()
-	Expr  = pyerl.PyErlExpression()
-	Tuple = pyerl.PyErlTuple(pyerl.PyErlAtom("application"))
-	Args  = pyerl.PyErlList()
-	
-	Doc.appendChild(Expr)
-	Expr.appendChild(Tuple)
-	Tuple.appendChild(pyerl.PyErlAtom(App))
-	Tuple.appendChild(Args)
-
-	VersionTuple = pyerl.PyErlTuple()
-	VersionTuple.appendChild(pyerl.PyErlAtom("vsn"))
-	VersionTuple.appendChild(pyerl.PyErlString(Config["Version"]))
-
-	Args.appendChild(VersionTuple)
-	
-	return Doc
-
-def add_version(AppSrc, Config):
-	ArgList = AppSrc.getElementsByTagName("list")[0]
+def addVersion(app_src):
+	arg_list = app_src.getElementsByTagName("list")[0]
 	
 	## If a vsn has already been specified leave it.
-	for Term in ArgList:
-		if hasattr(Term, '__iter__') and Term[0].getValue == "vsn":
+	for term in arg_list:
+		if hasattr(term, '__iter__') and term[0].getValue == "vsn":
 			return
 
-	VsnTuple = pyerl.PyErlTuple()
-	VsnTuple.appendChild(pyerl.PyErlAtom("vsn"))
-	VsnTuple.appendChild(pyerl.PyErlString(Config["Version"]))
-	ArgList.appendChild(VsnTuple)
-	return AppSrc
+	version_tuple = PyErl.PyErlTuple()
+	version_tuple.appendChild(PyErl.PyErlAtom("vsn"))
+	version_tuple.appendChild(PyErl.PyErlString(PyConfig["VERSION"]))
+	arg_list.appendChild(version_tuple)
+	return app_src
 
-def add_id(AppSrc, Config):
-	ArgList = AppSrc.getElementsByTagName("list")[0]
+def addId(app_src):
+	arg_list = app_src.getElementsByTagName("list")[0]
 	
 	## If a vsn has already been specified leave it.
-	for Term in ArgList:
-		if hasattr(Term, '__iter__') and Term[0].getValue == "id":
+	for term in arg_list:
+		if hasattr(term, '__iter__') and term[0].getValue == "id":
 			return
 
-	VsnTuple = pyerl.PyErlTuple()
-	VsnTuple.appendChild(pyerl.PyErlAtom("id"))
-	VsnTuple.appendChild(pyerl.PyErlString(Config["Id"]))
-	ArgList.appendChild(VsnTuple)
-	return AppSrc
+	id_tuple = PyErl.PyErlTuple()
+	id_tuple.appendChild(PyErl.PyErlAtom("id"))
+	id_tuple.appendChild(PyErl.PyErlString(PyConfig["ID"]))
+	arg_list.appendChild(id_tuple)
+	return app_src
+
+def defaultAppSrc(app):
+	doc   = PyErl.PyErlDocument()
+	expr  = PyErl.PyErlExpression()
+	tuple = PyErl.PyErlTuple(PyErl.PyErlAtom("application"))
+	args  = PyErl.PyErlList()
+	
+	doc.appendChild(expr)
+	expr.appendChild(tuple)
+	tuple.appendChild(PyErl.PyErlAtom(app))
+	tuple.appendChild(args)
+
+	version_tuple = PyErl.PyErlTuple()
+	version_tuple.appendChild(PyErl.PyErlAtom("vsn"))
+	version_tuple.appendChild(PyErl.PyErlString(PyConfig["VERSION"]))
+
+	args.appendChild(version_tuple)
+	
+	return doc
 
 ## gen_app_src(dct()) -> [string()]
 ## Looks in each app dir for a $APP.app.src file
 ## Generates a default one if it does not exist.
 ## These are deleted afterwards
-def gen_app_src(Config):
-	Generated = []
-	AppDirs   = get_dirs("apps", Config["SourceDir"])
-	for AppDir in AppDirs:
-		App     = os.path.basename(AppDir)
-		AppFish = AppDir + "/src/" + App + ".app.fish"
-		AppSrc  = AppDir + "/src/" + App + ".app.src"
-		AppFile = AppDir + "/ebin/" + App + ".app"
-		Generated.append(AppSrc)
-		if not os.path.isfile(AppFish):
-			Generated.append(AppFile)
-			File = open(AppSrc, "w")
-			File.write(pyerl.write(default_app_src(App, Config)))
-			File.close()
+def genAppSrc():
+	generated = []
+
+	print PyConfig
+	print PyConfig["APP_DIRS"]
+
+	for app_dir in PyConfig["APP_DIRS"]:
+		app      = os.path.basename(app_dir)
+		app_fish = app_dir + "/src/"  + app + ".app.fish"
+		app_src  = app_dir + "/src/"  + app + ".app.src"
+		app_file = app_dir + "/ebin/" + app + ".app"
+		generated.append(app_src)
+
+		src = ""
+		if not os.path.isfile(app_fish):
+			generated.append(app_file)
+			src = defaultAppSrc(app)
 		else:
-			Base = pyerl.parse_file(AppFish)
+			src = PyErl.parse_file(app_fish)
 			## The .fish file is a base configuration.
 			## We need to generate and append some default valeus to it
 			## such as build number, and, uh, others to be determined...
-			Base = add_version(Base, Config)
-			Base = add_id(Base, Config)
-			pyerl.write_file(AppSrc, Base)
+			src = addVersion(src)
+			src = addId(src)
+		PyErl.write_file(app_src, src)
 
-	return Generated
+	return generated
 
-def gen_config_file(Config):
-	AppDirs     = get_dirs("apps", Config["SourceDir"])
-	Doc         = pyerl.PyErlDocument()
-	Expressions = pyerl.PyErlList()
-	ConfigFile  = Config["InstallDir"] + "/etc/" + Config["MainApp"] + ".config.default"
-	for AppDir in AppDirs:
-		App       = os.path.basename(AppDir)
-		AppConfig = AppFile = AppDir + "/etc/" + App + ".config"
-		if os.path.isfile(AppConfig):
-			Terms = pyerl.parse_file(AppConfig)
-			Expressions.appendChild(Terms)
+def genConfigFile():
+	doc         = PyErl.PyErlDocument()
+	expressions = PyErl.PyErlList()
+	config_file = os.path.join(PyConfig["INSTALL_DIR"], "etc/" + PyConfig["APP_MAIN"] + ".config.default")
+	for app_dir in PyConfig["APP_DIRS"]:
+		app        = os.path.basename(app_dir)
+		app_config = os.path.join(app_dir, "etc/" + app + ".config")
+		if os.path.isfile(app_config):
+			terms = PyErl.parse_file(app_config)
+			expressions.appendChild(terms)
 
-	Doc.appendChild(Expressions)
-	pyerl.write_file(ConfigFile, Doc)
+	doc.appendChild(expressions)
+	PyErl.write_file(config_file, doc)
 
 ## gen_cookie(dict()) -> None
 ## Generates the cookie file
-def gen_cookie(Config):
-	FileName = make_dir_absolute(Config["InstallDir"] + "/var/run/.cookie")
+def genCookie():
+	file_name = PyDir.makeDirAbsolute(os.path.join(PyConfig["INSTALL_DIR"], "var/run/.cookie"))
 	
 	try:
-		os.remove(FileName)
+		os.remove(file_name)
 	except OSError, e:
 		pass
 
-	File     = open(FileName, "w")
-	File.write(Config["Cookie"])
-	File.close()
-	shell("chmod a-x "  + FileName)
-	shell("chmod a-w "  + FileName)
-	shell("chmod og-r " + FileName)
+	file = open(file_name, "w")
+	file.write(PyConfig["COOKIE"])
+	file.close()
+	PyUtil.shell("chmod a-x "  + file_name)
+	PyUtil.shell("chmod a-w "  + file_name)
+	PyUtil.shell("chmod og-r " + file_name)
 
 ## gen_shell_script(dict()) -> None
 ## Generates a shell script that will start the system
 ## or attach to a runnign node.
-def gen_shell_script(Config):
-	InstallDir = make_dir_absolute(Config["InstallDir"])
+def genShellScript():
+	install_dir = PyDir.makeDirAbsolute(PyConfig["INSTALL_DIR"])
+
+	cookie_file = os.path.join(install_dir, "var/run/.cookie")
+	file_name   = os.path.join(install_dir, "bin/" + PyConfig["APP_NAME"])
+	erl_dirs    = os.path.join(install_dir, "lib/erlang/lib/*/ebin")
+	erl_deps    = os.path.join(install_dir, "lib/erlang/lib/*/debs/*/ebin")
+	config_file = os.path.join(install_dir, "etc/" + PyConfig["APP_NAME"] + ".config")
+
+	print install_dir, file_name
+
+	execute     = "-eval \"application:start(" + PyConfig["APP_NAME"] + ")\""
+
+	file        = open(file_name, "w")
+	file.write("#! /bin/bash\n")
+	file.write("erl -pa " + erl_dirs + " -pa " + erl_deps + " -name " + PyConfig["APP_NAME"] +  "@`hostname -f` -setcookie \"`cat " + cookie_file + "`\" -config " + config_file +  " " + execute)
+	file.close()
+	PyUtil.shell("chmod a+x " + file_name)
+
+
+def genShellConnectScript():
+	install_dir = PyDir.makeDirAbsolute(PyConfig["INSTALL_DIR"])
+
+	cookie_file = os.path.join(install_dir, "var/run/.cookie")
+	file_name   = os.path.join(install_dir, "bin/" + PyConfig["APP_NAME"] + "-connect")
+	erl_dirs    = os.path.join(install_dir, "lib/erlang/lib/*/ebin")
+	erl_deps    = os.path.join(install_dir, "lib/erlang/lib/*/debs/*/ebin")
+
+	file        = open(file_name, "w")
+	file.write("#! /bin/bash\n")
+	file.write("erl -remsh " + PyConfig["APP_NAME"] + "@`hostname -f` -pa " + erl_dirs + " -pa " + erl_deps + " -name " + PyConfig["APP_NAME"] + "-shell-$$ -setcookie \"`cat " + cookie_file + "`\"")
+	file.close()
+	PyUtil.shell("chmod a+x " + file_name)
+
+def genShellEnvScript():
+	install_dir = PyDir.makeDirAbsolute(PyConfig["INSTALL_DIR"])
 	
-	CookieFile = InstallDir + "/var/run/.cookie"
-	FileName   = InstallDir + "/bin/" + Config["AppName"]
-	ErlDirs    = InstallDir + "/lib/erlang/lib/*/ebin"
-	ErlDeps    = InstallDir + "/lib/erlang/lib/*/debs/*/ebin"
-	ConfigFile = InstallDir + "/etc/" + Config["AppName"] + ".config"
+	cookie_file = os.path.join(install_dir, "var/run/.cookie")
+	file_name   = os.path.join(install_dir, "bin/" + PyConfig["APP_NAME"] + "-env")
+	erl_dirs    = os.path.join(install_dir, "lib/erlang/lib/*/ebin")
+	erl_deps    = os.path.join(install_dir, "lib/erlang/lib/*/debs/*/ebin")
+	config_file = os.path.join(install_dir, "etc/" + PyConfig["APP_NAME"] + ".config")
 
-	Execute    = "-eval \"application:start(" + Config["AppName"] + ")\""
+	file        = open(file_name, "w")
+	file.write("#! /bin/bash\n")
+	file.write("erl -pa " + erl_dirs + " -pa " + erl_deps + " -name " + PyConfig["APP_NAME"] + "-shell-$$ -setcookie \"`cat " + cookie_file + "`\" -config " + config_file)
+	file.close()
+	PyUtil.shell("chmod a+x " + file_name)
 
-	File       = open(FileName, "w")
-	File.write("#! /bin/bash\n")
-	File.write("erl -pa " + ErlDirs + " -pa " + ErlDeps + " -name " + Config["AppName"] +  "@`hostname -f` -setcookie \"`cat " + CookieFile + "`\" -config " + ConfigFile +  " " + Execute)
-	File.close()
-	shell("chmod a+x " + FileName)
-	
+## clean() -> integer()
+## Cleans the copiled bits.
+def clean():
+	print "Cleaning"
+	rebar_config_file = PyConfig["REBAR_CONFIG_FILE"]
+	file = open(rebar_config_file, "w")
+	if not file:
+		return 255
+	file.write(PyConfig["REBAR_CONFIG"])
+	file.close()
 
-def gen_shell_connect_script(Config):
-	InstallDir = make_dir_absolute(Config["InstallDir"])
-	
-	CookieFile = InstallDir + "/var/run/.cookie"
-	FileName   = InstallDir + "/bin/" + Config["AppName"] + "-shell"
-	ErlDirs    = InstallDir + "/lib/erlang/lib/*/ebin"
-	ErlDeps    = InstallDir + "/lib/erlang/lib/*/debs/*/ebin"
+	TmpFiles = gen_app_src(Config)
+	TmpFiles.append(rebar_config_file)
 
-	File       = open(FileName, "w")
-	File.write("#! /bin/bash\n")
-	File.write("erl -remsh " + Config["AppName"] + "@`hostname -f` -pa " + ErlDirs + " -pa " + ErlDeps + " -name " + Config["AppName"] + "-shell-$$ -setcookie \"`cat " + CookieFile + "`\"")
-	File.close()
-	shell("chmod a+x " + FileName)
+	Res  = PyUtil.shell("rebar --config " + rebar_config_file + " clean")
+	Res  = PyUtil.shell("rebar --config " + rebar_config_file + " delete-deps")
 
-## del_files([string()]) -> None
-## Cleans up the .app.src files generated.
-## Also deletes beam files generated because of them.
-def del_files(AppSrcs):
-	for AppSrc in AppSrcs:
-		if os.path.isfile(AppSrc):
-			os.remove(AppSrc)
-
-## verify_config([string()], dict()) -> boolean()
-## Makes certain that every value in [string()] is
-## set in dict()
-def verify_config(Requirements, Config):
-	for Requirement in Requirements:
-		if not Config[Requirement]:
-			print "Required config not set:", Requirement
-			return False
-	return True
+	del_files(TmpFiles)
+	return Res
 
 ## compile(string()) -> integer()
 ## Takes the text for the rebar config file and compiles the system with it.
 ## returns the success/fail code.
-def compile(RebarConfig, Config):
+def compile():
 	print "Compiling"
-	RebarConfigFile = Config["RebarConfigFile"]
-	File = open(RebarConfigFile, "w")
-	if not File:
-		return 255
-	File.write(RebarConfig)
-	File.close()
+	
+	tmp_files = genAppSrc()
 
-	TmpFiles = gen_app_src(Config)
-	TmpFiles.append(RebarConfigFile)
+	res  = PyUtil.shell("rebar --config " + PyConfig["REBAR_CONFIG_FILE"] + " get-deps")
+	res  = PyUtil.shell("rebar --config " + PyConfig["REBAR_CONFIG_FILE"] + " compile")
 
-	Res  = shell("rebar --config " + RebarConfigFile + " get-deps")
-	Res  = shell("rebar --config " + RebarConfigFile + " compile")
-
-	del_files(TmpFiles)
-	return Res
-
-## clean(string(), dict()) -> integer()
-## Cleans the copiled bits.
-def clean(RebarConfig, Config):
-	print "Cleaning"
-	RebarConfigFile = Config["RebarConfigFile"]
-	File = open(RebarConfigFile, "w")
-	if not File:
-		return 255
-	File.write(RebarConfig)
-	File.close()
-
-	TmpFiles = gen_app_src(Config)
-	TmpFiles.append(RebarConfigFile)
-
-	Res  = shell("rebar --config " + RebarConfigFile + " clean")
-	Res  = shell("rebar --config " + RebarConfigFile + " delete-deps")
-
-	del_files(TmpFiles)
-	return Res
+	del_files(tmp_files)
+	return res
 
 ## build(dict()) -> integer()
 ## Builds the compiled code into an app hierarchy
-def install(Config):
-	print "Installing"
-
-	if not verify_config(["AppName", "MainApp", "Cookie"], Config):
+def install():
+	if not PyConfig.verify(["APP_NAME", "APP_MAIN", "COOKIE"]):
 		print "Error in configuration. Unable to install"
 		return 255
 
-	ErlDirs    = ["ebin", "priv", "bin", "sbin"]
-	NIXDirs    = ["lib", "bin", "sbin", "etc", "var", "var/run", "log"]
-	AppDirs    = get_dirs("apps", Config["SourceDir"])
-	InstallDir = make_dir_absolute(Config["InstallDir"])
-	LibDir     = InstallDir + "/lib/erlang/lib"
-	print "==> Copying content"
-	for AppDir in AppDirs:
-		if os.path.exists(AppDir + "/var"):
-			copytree(AppDir + "/var", InstallDir + "/var")
-	print "==> Content copied"
-	print "==> Copying binaries"
-	## Create the base install directory
-	for NIXDir in NIXDirs:
-		if not os.path.exists(InstallDir + "/" + NIXDir):
-			os.makedirs(InstallDir + "/" + NIXDir)
+	print "Installing", PyConfig["APP_NAME"]
 
-	## Create the erlang lib directory
-	if not os.path.exists(LibDir):
-		os.makedirs(LibDir)
+	print "==> Making directories..."
+	for nix_dir in NIXDirs:
+		tnix_dir = PyDir.makeDirAbsolute(os.path.join(PyConfig["INSTALL_DIR"], nix_dir))
+		if not os.path.exists(tnix_dir):
+			os.makedirs(tnix_dir)
+	print "==> Directories made..."
 
-	## Copy the erlang binaries
-	for AppDir in AppDirs:
-		App = os.path.basename(AppDir) + "-" + Config["Version"]
-		for ErlDir in ErlDirs:
-			if os.path.exists(AppDir + "/" + ErlDir):
-				shell("rm -rf " + LibDir + "/" + App + "/" + ErlDir)
-				shutil.copytree(  AppDir + "/" + ErlDir, LibDir + "/" + App + "/" + ErlDir)
-	print "==> Binaries copied"
+	install_bin_dir = PyDir.makeDirAbsolute(os.path.join(PyConfig["INSTALL_DIR"], "bin"))
+	install_lib_dir = PyDir.makeDirAbsolute(os.path.join(PyConfig["INSTALL_DIR"], "lib"))
+	install_var_dir = PyDir.makeDirAbsolute(os.path.join(PyConfig["INSTALL_DIR"], "var"))
+
+	for app_dir in PyConfig["APP_DIRS"]:
+		basename = os.path.basename(app_dir)
+		bin_dir  = PyDir.makeDirAbsolute(os.path.join(app_dir, "bin"))
+		var_dir  = PyDir.makeDirAbsolute(os.path.join(app_dir, "var"))
+		
+		install_erl_dir = PyDir.makeDirAbsolute(os.path.join(PyConfig["INSTALL_DIR"], "lib/erlang/lib/" + basename + "-" + PyConfig["VERSION"]))
+
+		print "==> Installing", basename
+		print "====> Copying content..."
+		if os.path.exists(var_dir):
+			PyDir.copytree(var_dir, install_var_dir)
+		print "====> Content copied!"
+		print "====> Copying binaries..."	
+		## Clear conflicting versions
+		if os.path.exists(install_erl_dir):
+			PyUtil.shell("rm -rf " + install_erl_dir)
+		
+		## Create the erlang lib directry
+		if not os.path.exists(install_erl_dir):
+			os.makedirs(install_erl_dir)
+
+		for erl_dir in ErlDirs:
+			src_dir = os.path.join(app_dir, erl_dir)
+			erl_dir = os.path.join(install_erl_dir, erl_dir)
+			if os.path.exists(src_dir):
+				shutil.copytree(src_dir, erl_dir)
+		print "====> Binaries copied!"
+	
 	print "==> Copying dependencies"
 	## Create the Dependencies
-	AppDirs    = get_dirs("apps", "deps")
-	for AppDir in AppDirs:
-		App = os.path.basename(AppDir)
-		for ErlDir in ErlDirs:
-			if os.path.exists(AppDir + "/" + ErlDir):
-				shell("rm -rf " + LibDir + "/" + App + "/" + ErlDir)
-				shutil.copytree(  AppDir + "/" + ErlDir, LibDir + "/" + App + "/" + ErlDir)
+	dep_dirs    = getDirs("apps", "deps")
+	for dep_dir in dep_dirs:
+		dep = os.path.basename(dep_dir)
+		install_erl_dir = PyDir.makeDirAbsolute(os.path.join(PyConfig["INSTALL_DIR"], "lib/erlang/lib/" + dep))
+
+		## Clear conflicting versions
+		if os.path.exists(install_erl_dir):
+			PyUtil.shell("rm -rf " + install_erl_dir)
+
+		for erl_dir in ErlDirs:
+			src_dir = os.path.join(dep_dir, erl_dir)
+			erl_dir = os.path.join(install_erl_dir, erl_dir)
+			if os.path.exists(dep_dir):
+				shutil.copytree(dep_dir, erl_dir)
+
 	print "==> Dependencies copied"
 	print "==> Generating scripts"
-	gen_shell_script(Config)
-	gen_shell_connect_script(Config)
+	genShellScript()
+	genShellConnectScript()
+	genShellEnvScript()
 	print "==> Scripts generated"
 	print "==> Baking cookie"
-	gen_cookie(Config)
+	genCookie()
 	print "==> Cookie baked"
 	print "==> Generating configuration file"
-	gen_config_file(Config)
+	genConfigFile()
 	print "==> Configuration file generated"
 	print "==> Reticulating splines"
 	print "==> Splines reticulated"
 
-## interpret_cli() -> {command, dict()}
-## Converts the cli arguements into config options
-## and determines the command to run.
-def interpret_cli(Config):
-	Command = "compile"
-	Dict    = {
-		"RebarConfigFile" : ".rebar.config",
-		"IncludeDirs"     : [],
-		"ModuleDirs"      : [],
-		"InstallDir"      : "install",
-		"SourceDir"       : "esrc",
-		"ErlVersion"      : "16",
-		"AppName"         : False,
-		"MainApp"         : False,
-		"Cookie"          : False,
-		"Version"         : get_version(),
-		"Id"              : get_id(),
-		"ExternalDependencies" : []
-	}
+## configure() -> no_return()
+## Explores the SOURCE_DIR directory and generates the appropriate
+##     rebar config
+def configure():
+	PyConfig["APP_DIRS"]     = getDirs("apps")
+	PyConfig["INCLUDE_DIRS"] = getDirs("include")
+	PyConfig["REBAR_CONFIG"] = generateRebarConfig()
 
-	Updated = []
+	PyConfig["COOKIE"]       = PyGit.getId()
 
-	for Arg in sys.argv:
-		if "=" in Arg:
-			Split = Arg.split("=")
-			Dict[Split[0]] = Split[1]
-			Updated.append(Split[0])
-		else:
-			Command = Arg
+	file = open(PyConfig["REBAR_CONFIG_FILE"], "w")
+	if not file:
+		return 255
+	file.write(PyConfig["REBAR_CONFIG"])
+	file.close()
 
-	for Key in Dict:
-		if Key not in Config:
-			Config[Key] = Dict[Key]
-
-	for Update in Updated:
-		Config[Update] = Dict[Update]
-
-	return (Command, Config)
-
-## usage() -> None
-## Prints usage information to screen
-def usage():
-	print "fishmake"
-	print "Usage: fishmake [Arg=Value] <compile | install>"
-	print ""
-	print "Modes:"
-	print "\tcompile - Compiles the source code located in (SourceDir)"
-	print "\tinstall - Compiles the source code located in (SourceDir)"
-	print "\t          and then installs it into (InstallDir)."
-	print ""
-	print "Configuration:"
-	print "\tAny option may be specified on the command line in the format"
-	print "\tArguement=Value. For convenience frequently used values may be"
-	print "\tspecified in fishmake.config. The format of this files is a python"
-	print "\tdictionary that is assigned to the variable Config. For example,"
-	print "\tConfig = {\"MainApp\":\"FishMake\"}"
-	print ""
-	print "Options:"
-	print "\tAppName    - Specifies the name of the application being compiled."
-	print "\t             Must be set."
-	print "\tCookie     - Specifies the cookie vale to be used. Must be set."
-	print "\tErlVersion - Version of erlang to require. Default 16"
-	print "\tInstallDir - Location to install the system to. Default ./install"
-	print "\tMainApp    - Specifies which erlang app is to be started to start the"
-	print "\t             system. Must be set."
-	print "\tSourceDir  - Specifies which directory contains the erlang app source."
-	print "\t             Default ./esrc"
-
-## main(string(), dict()) -> integer()
-## Build things and stuff.
-def main(Command, Config):
-	Rebar  = gen_rebar_config(Config)
-	if Command == "compile":
-		Res    = compile(Rebar, Config)
-		if Res != 0:
-			return Res
-	elif Command == "install":
-		Res    = compile(Rebar, Config)
-		if Res != 0:
-			return Res
-		Res    = install(Config)
-		if Res != 0:
-			return Res
-	elif Command == "clean":
-		Res = clean(Rebar, Config)
+def main():
+	configure()
+	if      PyConfig.get(0) == "clean":
+		return clean()
+	elif PyConfig.get(0) == "compile":
+		compile()
+	elif PyConfig.get(0) == "install":
+		install()
 	else:
-		usage()
-	return 0
+		print "Usage: fishmake <clean|compile|install>"
 
-
-(Command, Config) = interpret_cli(Config)
-main(Command, Config)
-
-
+main()
