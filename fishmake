@@ -10,7 +10,7 @@ import pyerl         as PyErl
 import os, os.path, sys, subprocess, shutil
 
 ## Directories found in a built erlang src dir.
-ErlDirs    = ["doc", "ebin", "priv"]
+ErlDirs    = ["ebin", "priv"]
 
 ## Directories that a built app should contain.
 NIXDirs    = ["bin", "doc", "etc", "lib", "lib/erlang/lib", "log", "sbin", "var", "var/run"]
@@ -312,6 +312,7 @@ def compile():
 	tmp_files = genAppSrc()
 
 	res  = PyUtil.shell("rebar --config " + PyConfig["REBAR_CONFIG_FILE"] + " get-deps")
+	res  = PyUtil.shell("rebar --config " + PyConfig["REBAR_CONFIG_FILE"] + " doc")
 	res  = PyUtil.shell("rebar --config " + PyConfig["REBAR_CONFIG_FILE"] + " compile")
 
 	del_files(tmp_files)
@@ -340,9 +341,12 @@ def install():
 	for app_dir in PyConfig["APP_DIRS"]:
 		basename = os.path.basename(app_dir)
 		bin_dir  = PyDir.makeDirAbsolute(os.path.join(app_dir, "bin"))
+		doc_dir  = PyDir.makeDirAbsolute(os.path.join(app_dir, "doc"))
 		var_dir  = PyDir.makeDirAbsolute(os.path.join(app_dir, "var"))
 		
 		install_erl_dir = PyDir.makeDirAbsolute(os.path.join(PyConfig["INSTALL_DIR"], "lib/erlang/lib/" + basename + "-" + PyConfig["VERSION"]))
+		install_doc_dir = PyDir.makeDirAbsolute(os.path.join(PyConfig["INSTALL_DIR"], "doc/" + basename + "-" + PyConfig["VERSION"]))
+
 
 		print "==> Installing", basename
 		print "====> Copying content..."
@@ -363,6 +367,10 @@ def install():
 			erl_dir = os.path.join(install_erl_dir, erl_dir)
 			if os.path.exists(src_dir):
 				shutil.copytree(src_dir, erl_dir)
+
+		if os.path.exists(doc_dir):
+			shutil.copytree(doc_dir, install_doc_dir)
+
 		print "====> Binaries copied!"
 	
 	print "==> Installing dependencies"
