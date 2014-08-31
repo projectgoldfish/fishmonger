@@ -17,6 +17,7 @@ NIXDirs    = ["bin", "doc", "etc", "lib", "lib/erlang/lib", "log", "sbin", "var"
 
 ## Initialize config
 PyConfig.init("fishmake.config", {
+	"LIB_DIRS"          : os.getenv("ERL_LIB_DIRS",      ""),
 	"INCLUDE_DIRS"      : os.getenv("ERL_INCLUDE_DIRS",  "."),
 	"SOURCE_DIR"        : os.getenv("ERL_SRC_DIR",       "esrc"),
 	"ERL_VERSION"       : os.getenv("ERL_VERSION",       "16"),
@@ -52,14 +53,17 @@ def getAppDirs(root = PyConfig["SOURCE_DIR"]):
 	return app_dirs
 
 def getDirs(type, root = PyConfig["SOURCE_DIR"]):
-	if type == "apps":
-		return getAppDirs(root)
-	else:	
-		dirs = []
-		for (dir, a, b) in os.walk(root):
-			if type in dir:
-				dirs.append(PyDir.makeDirAbsolute(dir))
-		return dirs
+	try:
+		if type == "apps":
+			return getAppDirs(root)
+		else:	
+			dirs = []
+			for (dir, a, b) in os.walk(root):
+				if type in dir:
+					dirs.append(PyDir.makeDirAbsolute(dir))
+			return dirs
+	except:
+		return []
 
 def makeRepoTuple(repository):
 	repo_tuple    = PyErl.PyErlTuple()
@@ -361,13 +365,14 @@ def install():
 				shutil.copytree(src_dir, erl_dir)
 		print "====> Binaries copied!"
 	
-	print "==> Copying dependencies"
+	print "==> Installing dependencies"
 	## Create the Dependencies
 	dep_dirs    = getDirs("apps", "deps")
 	for dep_dir in dep_dirs:
 		dep = os.path.basename(dep_dir)
 		install_erl_dir = PyDir.makeDirAbsolute(os.path.join(PyConfig["INSTALL_DIR"], "lib/erlang/lib/" + dep))
 
+		print "==> Installing", dep
 		## Clear conflicting versions
 		if os.path.exists(install_erl_dir):
 			PyUtil.shell("rm -rf " + install_erl_dir)
@@ -378,7 +383,7 @@ def install():
 			if os.path.exists(dep_dir):
 				shutil.copytree(dep_dir, erl_dir)
 
-	print "==> Dependencies copied"
+	print "==> Dependencies installed"
 	print "==> Generating scripts"
 	genShellScript()
 	genShellConnectScript()
@@ -398,7 +403,15 @@ def install():
 ##     rebar config
 def configure():
 	PyConfig["APP_DIRS"]     = getDirs("apps")
-	PyConfig["INCLUDE_DIRS"] = getDirs("include")
+
+	## Get the include dirs for thsi project.
+	dirs = getDirs("include")
+	for dir in PyConfig["LIB_DIRS"].split(":"):
+		dirs += getDirs("include", dir)
+	for dir in PyConfig["INCLUDE_DIRS"].split(":"):
+		dirs.append(dir)
+	PyConfig["INCLUDE_DIRS"] = dirs
+
 	PyConfig["REBAR_CONFIG"] = generateRebarConfig()
 
 	PyConfig["COOKIE"]       = PyGit.getId()
@@ -411,6 +424,7 @@ def configure():
 
 def main():
 	configure()
+	print PyConfig
 	if      PyConfig.get(0) == "clean":
 		return clean()
 	elif PyConfig.get(0) == "compile":
