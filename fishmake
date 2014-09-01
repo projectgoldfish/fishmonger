@@ -240,7 +240,6 @@ def getApps(app):
 			if not app_file:
 				return [app]
 
-	print "File:", app_file
 	(doc, ) = PyErl.parse_file(app_file),
 
 	tuples = doc.getElementsByTagName("tuple")
@@ -269,8 +268,6 @@ def genShellScript():
 
 	start_apps  = ""
 	apps        = getApps(PyConfig["APP_MAIN"])
-
-	print "apps", apps
 
 	for app in apps:
 		start_apps += "-eval \"application:start(" + app + ")\" "
