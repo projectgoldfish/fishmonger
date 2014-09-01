@@ -88,9 +88,6 @@ def generateRebarConfig():
 	expressions = []
 
 	src_dirs    = PyErl.term("{sub_dirs, []}.")
-	print src_dirs
-	print src_dirs.to_string()
-	print src_dirs[1]
 	for app_dir in PyConfig["APP_DIRS"]:
 		src_dirs[1].appendChild(PyErl.PyErlString(app_dir))
 	expressions.append(src_dirs)
@@ -175,9 +172,6 @@ def defaultAppSrc(app):
 def genAppSrc():
 	generated = []
 
-	print PyConfig
-	print PyConfig["APP_DIRS"]
-
 	for app_dir in PyConfig["APP_DIRS"]:
 		app      = os.path.basename(app_dir)
 		app_fish = app_dir + "/src/"  + app + ".app.fish"
@@ -231,25 +225,64 @@ def genCookie():
 	PyUtil.shell("chmod a-w "  + file_name)
 	PyUtil.shell("chmod og-r " + file_name)
 
+## Look at the applications entry of the app.
+## If we have app.app in our intall directory then
+## get it's apps as well.
+## If we don't assume it's a native app.
+def getApps(app):
+	apps = []
+	
+	app_file = PyDir.find(app + ".app", PyConfig["INSTALL_DIR"])
+	if not app_file:
+		app_file = PyDir.find(app + ".app", "/usr/lib/erlang") ## Search in a nix install
+		if not app_file:
+			app_file = PyDir.find(app + ".app", "/usr/local/lib/erlang") ## Search in an OSX install
+			if not app_file:
+				return [app]
+
+	print "File:", app_file
+	(doc, ) = PyErl.parse_file(app_file),
+
+	tuples = doc.getElementsByTagName("tuple")
+	tuple = None
+	for ttuple in tuples:
+		if ttuple[0].to_string() == "applications":
+			tuple = ttuple
+			break
+
+	if tuple == None:
+		return [app]
+
+	for dapp in tuple[1]:
+		tapps = getApps(dapp.to_string())
+		for tapp in tapps:
+			if not tapp in apps:
+				 apps.append(tapp)
+	apps.append(app)
+	return apps
+
 ## gen_shell_script(dict()) -> None
 ## Generates a shell script that will start the system
 ## or attach to a runnign node.
 def genShellScript():
 	install_dir = PyDir.makeDirAbsolute(PyConfig["INSTALL_DIR"])
 
+	start_apps  = ""
+	apps        = getApps(PyConfig["APP_MAIN"])
+
+	print "apps", apps
+
+	for app in apps:
+		start_apps += "-eval \"application:start(" + app + ")\" "
+
 	cookie_file = os.path.join(install_dir, "var/run/.cookie")
 	file_name   = os.path.join(install_dir, "bin/" + PyConfig["APP_NAME"])
 	erl_dirs    = os.path.join(install_dir, "lib/erlang/lib/*/ebin")
-	erl_deps    = os.path.join(install_dir, "lib/erlang/lib/*/debs/*/ebin")
+	erl_deps    = os.path.join(install_dir, "lib/erlang/lib/*/deps/*/ebin")
 	config_file = os.path.join(install_dir, "etc/" + PyConfig["APP_NAME"] + ".config")
-
-	print install_dir, file_name
-
-	execute     = "-eval \"application:start(" + PyConfig["APP_NAME"] + ")\""
-
 	file        = open(file_name, "w")
 	file.write("#! /bin/bash\n")
-	file.write("erl -pa " + erl_dirs + " -pa " + erl_deps + " -name " + PyConfig["APP_NAME"] +  "@`hostname -f` -setcookie \"`cat " + cookie_file + "`\" -config " + config_file +  " " + execute)
+	file.write("erl -pa " + erl_dirs + " -pa " + erl_deps + " -name " + PyConfig["APP_NAME"] +  "@`hostname -f` -setcookie \"`cat " + cookie_file + "`\" -config " + config_file +  " " + start_apps)
 	file.close()
 	PyUtil.shell("chmod a+x " + file_name)
 
@@ -358,7 +391,7 @@ def install():
 		if os.path.exists(install_erl_dir):
 			PyUtil.shell("rm -rf " + install_erl_dir)
 		
-		## Create the erlang lib directry
+		## Create the erlang lib directory
 		if not os.path.exists(install_erl_dir):
 			os.makedirs(install_erl_dir)
 
@@ -369,6 +402,8 @@ def install():
 				shutil.copytree(src_dir, erl_dir)
 
 		if os.path.exists(doc_dir):
+			if os.path.exists(install_doc_dir):
+				PyUtil.shell("rm -rf " + install_doc_dir)
 			shutil.copytree(doc_dir, install_doc_dir)
 
 		print "====> Binaries copied!"
@@ -380,6 +415,10 @@ def install():
 		dep = os.path.basename(dep_dir)
 		install_erl_dir = PyDir.makeDirAbsolute(os.path.join(PyConfig["INSTALL_DIR"], "lib/erlang/lib/" + dep))
 
+		## Create the erlang lib directory
+		if not os.path.exists(install_erl_dir):
+			os.makedirs(install_erl_dir)
+
 		print "==> Installing", dep
 		## Clear conflicting versions
 		if os.path.exists(install_erl_dir):
@@ -388,8 +427,8 @@ def install():
 		for erl_dir in ErlDirs:
 			src_dir = os.path.join(dep_dir, erl_dir)
 			erl_dir = os.path.join(install_erl_dir, erl_dir)
-			if os.path.exists(dep_dir):
-				shutil.copytree(dep_dir, erl_dir)
+			if os.path.exists(src_dir):
+				shutil.copytree(src_dir, erl_dir)
 
 	print "==> Dependencies installed"
 	print "==> Generating scripts"
@@ -432,7 +471,6 @@ def configure():
 
 def main():
 	configure()
-	print PyConfig
 	if      PyConfig.get(0) == "clean":
 		return clean()
 	elif PyConfig.get(0) == "compile":
