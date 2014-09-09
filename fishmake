@@ -189,22 +189,21 @@ def clean():
 def compile():
 	print "Compiling"
 	res = 0
-	print PyConfig["APP_DIRS"]
+
+	compilers = [fishmake.compilers.erlang, fishmake.compilers.cxx, fishmake.compilers.js]
+
 	for app_dir in PyConfig["APP_DIRS"]:
 		if app_dir == "":
 			continue
 		print "==>", os.path.basename(app_dir)
 
-		res = fishmake.compilers.erlang(app_dir)
-		if not res == 0:
-			return res;
-		res = fishmake.compilers.cxx(app_dir)
-		if not res == 0:
-			return res;
-		res = fishmake.compilers.js(app_dir)
-		if not res == 0:
-			return res;
-		
+		src_dir = os.path.join(app_dir, "src")
+		if PyDir.findFilesByExts(["cpp", "c"], src_dir)
+
+		for compiler in compilers:
+			res = compiler(app_dir)
+			if not res == 0:
+				return res;
 	print "Compilation done"
 
 	return res

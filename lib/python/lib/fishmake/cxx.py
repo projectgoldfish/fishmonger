@@ -3,7 +3,7 @@ import pybase.config
 import os.path
 
 def compiler(path):
-	print "===> cxx"
+	print "====> cxx"
 	includes = " "
 	for include in PyConfig["INCLUDE_DIRS"]:
 		if include == "":

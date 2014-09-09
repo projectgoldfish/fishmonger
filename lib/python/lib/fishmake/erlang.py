@@ -2,36 +2,67 @@ from   pybase.config import Config as PyConfig
 import pybase.config
 import pyerl       as PyErl
 import pybase.util as PyUtil
+import pybase.dir  as PyDir
 import os.path
 
-def addVersion(app_src):
-	arg_list = app_src.getElementsByTagName("list")[0]
+class ErlApp():
+	def __init__(self, file):
+		dir  = os.path.dirname(file)
+		base = os.path.basename(file)
+		app  = base.split(":")[0]
+
+		self.app_name = app
+		self.dir      = dir
+		self.doc      = PyErl.parse_file(file)
+
+		self.addModules()
+		self.addVersion()
+		self.addId()
+
+	def write(self, file):
+		PyErl.write_file(file, self.doc)
+
+	def addModules(self):
+		arg_list = self.doc.getElementsByTagName("list")[0]
+		for term in arg_list:
+			if hasattr(term, '__iter__') and term[0].getValue == "modules":
+				return
+
+		modules_tuple = PyErl.term("{modules, []}.")
+
+		for mod in PyDir.findFilesByExt(self.dir, "erl"):
+			print mod
+
+
+		modules_tuple[1].appendChild(PyErl.PyErlString(PyConfig["APP_VERSION"]))
+		arg_list.appendChild(modules_tuple)
+
+	def addVersion(self):
+		arg_list = self.doc.getElementsByTagName("list")[0]
+		
+		## If a vsn has already been specified leave it.
+		for term in arg_list:
+			if hasattr(term, '__iter__') and term[0].getValue == "vsn":
+				return
+
+		version_tuple = PyErl.PyErlTuple()
+		version_tuple.appendChild(PyErl.PyErlAtom("vsn"))
+		version_tuple.appendChild(PyErl.PyErlString(PyConfig["APP_VERSION"]))
+		arg_list.appendChild(version_tuple)
 	
-	## If a vsn has already been specified leave it.
-	for term in arg_list:
-		if hasattr(term, '__iter__') and term[0].getValue == "vsn":
-			return
+	def addId(self):
+		arg_list = self.doc.getElementsByTagName("list")[0]
+		
+		## If a vsn has already been specified leave it.
+		for term in arg_list:
+			if hasattr(term, '__iter__') and term[0].getValue == "id":
+				return
 
-	version_tuple = PyErl.PyErlTuple()
-	version_tuple.appendChild(PyErl.PyErlAtom("vsn"))
-	version_tuple.appendChild(PyErl.PyErlString(PyConfig["APP_VERSION"]))
-	arg_list.appendChild(version_tuple)
-	return app_src
-
-def addId(app_src):
-	arg_list = app_src.getElementsByTagName("list")[0]
-	
-	## If a vsn has already been specified leave it.
-	for term in arg_list:
-		if hasattr(term, '__iter__') and term[0].getValue == "id":
-			return
-
-	id_tuple = PyErl.PyErlTuple()
-	id_tuple.appendChild(PyErl.PyErlAtom("id"))
-	id_tuple.appendChild(PyErl.PyErlString(PyConfig["APP_ID"]))
-	arg_list.appendChild(id_tuple)
-	return app_src
-
+		id_tuple = PyErl.PyErlTuple()
+		id_tuple.appendChild(PyErl.PyErlAtom("id"))
+		id_tuple.appendChild(PyErl.PyErlString(PyConfig["APP_ID"]))
+		arg_list.appendChild(id_tuple)
+		
 ## Looks in each app dir for a $APP.app.fish file
 ## uses it to generate a .app
 def genApp(path, config):
@@ -39,25 +70,14 @@ def genApp(path, config):
 	app_src  = os.path.join(path, "src/"  + app + ".app.fish")
 	app_file = os.path.join(path, "ebin/" + app + ".app")
 	
-	print app_src
-
-	if not os.path.isfile(app_src):
-		return
-	doc = PyErl.parse_file(app_src)
-
-	## The .fish file is a base configuration.
-	## We need to generate and append some default valeus to it
-	## such as build number, and, uh, others to be determined...
-	doc = addVersion(doc)
-	doc = addId(doc)
-	PyErl.write_file(app_file, doc)
+	if os.path.isfile(app_src):
+		doc  = ErlApp(app_src)
+		doc.write(app_file)
 
 def compiler(path):
 	print "====> erlang"
 	config = pybase.config.merge(PyConfig, pybase.config.parse(".fishmake.erl"))
 	
-	genApp(path, config)
-
 	includes = " "
 	for include in config["INCLUDE_DIRS"]:
 		if include == "":
@@ -65,5 +85,10 @@ def compiler(path):
 		includes += "-I " + include + " "
 
 	output_dir = os.path.join(path, "ebin")
+	print output_dir, os.path.isdir(output_dir)
+	if not os.path.isdir(output_dir):
+		os.mkdir(output_dir)
+		
+	genApp(path, config)
 	cmd = "erlc " + includes + "-o " + output_dir + " " + os.path.join(path, "src/*.erl")
 	return PyUtil.shell(cmd)
