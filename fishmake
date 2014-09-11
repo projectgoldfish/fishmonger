@@ -1,7 +1,10 @@
 #! /usr/bin/python
 
 import fishmake
-import fishmake.compilers
+
+compilers = ["cxx", "erlang", "js"]
+for compiler in compilers:
+	__import__("fishmake.compilers." + compiler)
 
 from   pybase.config import Config as PyConfig
 import pybase.util   as PyUtil
@@ -198,12 +201,18 @@ def compile():
 		print "==>", os.path.basename(app_dir)
 
 		src_dir = os.path.join(app_dir, "src")
-		if PyDir.findFilesByExts(["cpp", "c"], src_dir)
 
+		types = []
 		for compiler in compilers:
-			res = compiler(app_dir)
-			if not res == 0:
-				return res;
+			try:
+				types = compiler.getFileTypes()
+			except:
+				types = []
+			if PyDir.findFilesByExts(types, src_dir):
+				res = compiler.compile(app_dir)
+				if not res == 0:
+					return res	
+
 	print "Compilation done"
 
 	return res

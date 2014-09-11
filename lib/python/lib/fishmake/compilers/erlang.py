@@ -5,6 +5,9 @@ import pybase.util as PyUtil
 import pybase.dir  as PyDir
 import os.path
 
+def getFileTypes():
+	return ["erl"]
+
 class ErlApp():
 	def __init__(self, file):
 		dir  = os.path.dirname(file)
@@ -30,7 +33,7 @@ class ErlApp():
 
 		modules_tuple = PyErl.term("{modules, []}.")
 
-		for mod in PyDir.findFilesByExt(self.dir, "erl"):
+		for mod in PyDir.findFilesByExts(["erl"], self.dir):
 			print mod
 
 
@@ -74,7 +77,7 @@ def genApp(path, config):
 		doc  = ErlApp(app_src)
 		doc.write(app_file)
 
-def compiler(path):
+def compile(path):
 	print "====> erlang"
 	config = pybase.config.merge(PyConfig, pybase.config.parse(".fishmake.erl"))
 	
@@ -85,7 +88,6 @@ def compiler(path):
 		includes += "-I " + include + " "
 
 	output_dir = os.path.join(path, "ebin")
-	print output_dir, os.path.isdir(output_dir)
 	if not os.path.isdir(output_dir):
 		os.mkdir(output_dir)
 		
