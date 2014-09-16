@@ -94,3 +94,10 @@ def compile(path):
 	genApp(path, config)
 	cmd = "erlc " + includes + "-o " + output_dir + " " + os.path.join(path, "src/*.erl")
 	return PyUtil.shell(cmd)
+
+def install(path):
+	pass
+
+def doc(path):
+	pass
+

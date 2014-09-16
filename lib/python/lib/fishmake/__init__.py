@@ -1,3 +1,8 @@
+import fishmake.compilers
+
+for c in fishmake.compilers.available():
+	__import__(c)
+
 import pybase.git    as PyGit
 
 ## Directories found in a built erlang src dir.
@@ -31,4 +36,10 @@ Defaults = [
 
 	("LIB_DIRS",         ""),
 	("SRC_DIR",          "src")
+]
+
+compilers = [
+	fishmake.compilers.cxx,
+	fishmake.compilers.erlang,
+	fishmake.compilers.js
 ]

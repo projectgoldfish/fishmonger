@@ -193,25 +193,16 @@ def compile():
 	print "Compiling"
 	res = 0
 
-	compilers = [fishmake.compilers.erlang, fishmake.compilers.cxx, fishmake.compilers.js]
-
-	for app_dir in PyConfig["APP_DIRS"]:
-		if app_dir == "":
-			continue
+	for app_dir in PyConfig["COMPILERS"]:
 		print "==>", os.path.basename(app_dir)
 
 		src_dir = os.path.join(app_dir, "src")
 
 		types = []
-		for compiler in compilers:
-			try:
-				types = compiler.getFileTypes()
-			except:
-				types = []
-			if PyDir.findFilesByExts(types, src_dir):
-				res = compiler.compile(app_dir)
-				if not res == 0:
-					return res	
+		for compiler in PyConfig["COMPILERS"][app_dir]:
+			res = compiler.compile(app_dir)
+			if not res == 0:
+				return res	
 
 	print "Compilation done"
 
@@ -336,6 +327,28 @@ def configure():
 	for dir in PyConfig["EXT_DEPS"]:
 		dirs += getDirs("include", dir)
 	PyConfig["INCLUDE_DIRS"] += dirs
+
+	## Detect compilers to use
+	compilers = {}
+	for app_dir in PyConfig["APP_DIRS"]:
+		if app_dir == "":
+			continue
+
+		types      = []
+		tcompilers = []
+
+		src_dir = os.path.join(app_dir, "src")
+
+		for compiler in fishmake.compilers:
+			try:
+				types = compiler.getFileTypes()
+			except:
+				types = []
+			if PyDir.findFilesByExts(types, src_dir):
+				tcompilers.append(compiler)
+		compilers[app_dir] = tcompilers
+	PyConfig["COMPILERS"] = compilers
+
 
 def main():
 	configure()
