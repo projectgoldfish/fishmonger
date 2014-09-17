@@ -5,6 +5,9 @@ import pybase.util as PyUtil
 import pybase.dir  as PyDir
 import os.path
 
+## Directories found in a built erlang src dir.
+dirs  = ["ebin", "priv"]
+
 def getFileTypes():
 	return ["erl"]
 
@@ -78,7 +81,7 @@ def genApp(path, config):
 		doc.write(app_file)
 
 def compile(path):
-	print "====> erlang"
+	print "====> Erlang"
 	config = pybase.config.merge(PyConfig, pybase.config.parse(".fishmake.erl"))
 	
 	includes = " "
@@ -96,7 +99,25 @@ def compile(path):
 	return PyUtil.shell(cmd)
 
 def install(path):
-	pass
+	basename        = os.path.basename(path)
+	install_erl_dir = PyDir.makeDirAbsolute(os.path.join(PyConfig["INSTALL_DIR"], "lib/erlang/lib/" + basename + "-" + PyConfig["APP_VERSION"]))
+		
+	print "====> Copying Erlang binaries..."
+		## Clear conflicting versions
+		if os.path.exists(install_erl_dir):
+			PyUtil.shell("rm -rf " + install_erl_dir)
+		
+		## Create the erlang lib directory
+		if not os.path.exists(install_erl_dir):
+			os.makedirs(install_erl_dir)
+
+		for erl_dir in dirs:
+			src_dir = os.path.join(path, erl_dir)
+			erl_dir = os.path.join(install_erl_dir, erl_dir)
+			if os.path.exists(src_dir):
+				shutil.copytree(src_dir, erl_dir)
+	print "====> Erlang binaries copied!"
+	return 0
 
 def doc(path):
 	pass

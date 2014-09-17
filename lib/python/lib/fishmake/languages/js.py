@@ -14,3 +14,10 @@ def compile(path):
 		includes += "-I " + include + " "
 
 	return 0
+
+def install(path):
+	
+	pass
+
+def doc(path):
+	pass

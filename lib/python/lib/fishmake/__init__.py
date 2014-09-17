@@ -1,12 +1,13 @@
-import fishmake.compilers
+import fishmake.languages
 
-for c in fishmake.compilers.available():
-	__import__(c)
+compilers = []
+for c in fishmake.languages.available():
+	a = __import__("fishmake.languages." + c)
+	exec("compilers.append(a.languages." + c + ")")
+
+print compilers
 
 import pybase.git    as PyGit
-
-## Directories found in a built erlang src dir.
-ErlDirs  = ["ebin", "priv"]
 
 ## Directories that a built app should contain.
 NIXDirs  = ["bin", "doc", "etc", "lib", "lib/erlang/lib", "log", "sbin", "var", "var/run"]
@@ -36,10 +37,4 @@ Defaults = [
 
 	("LIB_DIRS",         ""),
 	("SRC_DIR",          "src")
-]
-
-compilers = [
-	fishmake.compilers.cxx,
-	fishmake.compilers.erlang,
-	fishmake.compilers.js
 ]

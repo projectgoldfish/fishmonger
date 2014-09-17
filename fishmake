@@ -2,10 +2,6 @@
 
 import fishmake
 
-compilers = ["cxx", "erlang", "js"]
-for compiler in compilers:
-	__import__("fishmake.compilers." + compiler)
-
 from   pybase.config import Config as PyConfig
 import pybase.util   as PyUtil
 import pybase.dir    as PyDir
@@ -233,37 +229,27 @@ def install():
 		bin_dir  = PyDir.makeDirAbsolute(os.path.join(app_dir, "bin"))
 		doc_dir  = PyDir.makeDirAbsolute(os.path.join(app_dir, "doc"))
 		var_dir  = PyDir.makeDirAbsolute(os.path.join(app_dir, "var"))
-		
-		install_erl_dir = PyDir.makeDirAbsolute(os.path.join(PyConfig["INSTALL_DIR"], "lib/erlang/lib/" + basename + "-" + PyConfig["APP_VERSION"]))
-		install_doc_dir = PyDir.makeDirAbsolute(os.path.join(PyConfig["INSTALL_DIR"], "doc/" + basename + "-" + PyConfig["APP_VERSION"]))
-
 
 		print "==> Installing", basename
+
+		if app_dir in PyConfig["COMPILERS"]:
+			for compiler in PyConfig["COMPILERS"][app_dir]:
+				print "==>"
+				res = compiler.install(app_dir)
+				if not res == 0:
+					print "Problem installing ", app_dir, res
+
 		print "====> Copying content..."
 		if os.path.exists(var_dir):
 			PyDir.copytree(var_dir, install_var_dir)
 		print "====> Content copied!"
-		print "====> Copying binaries..."	
-		## Clear conflicting versions
-		if os.path.exists(install_erl_dir):
-			PyUtil.shell("rm -rf " + install_erl_dir)
 		
-		## Create the erlang lib directory
-		if not os.path.exists(install_erl_dir):
-			os.makedirs(install_erl_dir)
-
-		for erl_dir in fishmake.ErlDirs:
-			src_dir = os.path.join(app_dir, erl_dir)
-			erl_dir = os.path.join(install_erl_dir, erl_dir)
-			if os.path.exists(src_dir):
-				shutil.copytree(src_dir, erl_dir)
-
+		## Install documentation
 		if os.path.exists(doc_dir):
+			install_doc_dir = PyDir.makeDirAbsolute(os.path.join(PyConfig["INSTALL_DIR"], "doc/" + basename + "-" + PyConfig["APP_VERSION"]))
 			if os.path.exists(install_doc_dir):
 				PyUtil.shell("rm -rf " + install_doc_dir)
-			shutil.copytree(doc_dir, install_doc_dir)
-
-		print "====> Binaries copied!"
+			shutil.copytree(doc_dir, install_doc_dir)	
 	
 	print "==> Installing dependencies"
 	## Create the Dependencies
@@ -330,6 +316,9 @@ def configure():
 
 	## Detect compilers to use
 	compilers = {}
+
+	print fishmake.compilers
+
 	for app_dir in PyConfig["APP_DIRS"]:
 		if app_dir == "":
 			continue
