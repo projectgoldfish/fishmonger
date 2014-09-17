@@ -5,8 +5,6 @@ for c in fishmake.languages.available():
 	a = __import__("fishmake.languages." + c)
 	exec("compilers.append(a.languages." + c + ")")
 
-print compilers
-
 import pybase.git    as PyGit
 
 ## Directories that a built app should contain.

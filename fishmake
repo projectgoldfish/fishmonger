@@ -13,34 +13,7 @@ import os, os.path, sys, subprocess, shutil
 
 PyConfig.init(".fishmake", fishmake.Defaults)
 
-def del_files(tmp_files):
-	for t_file in tmp_files:
-		if os.path.isfile(t_file):
-			os.remove(t_file)
 
-def getDirs(type, root = PyConfig["SRC_DIR"]):
-	try:
-		found_dirs = []
-		dirs = os.listdir(root)
-		for dir in dirs:
-			if dir[0] == ".":
-				continue
-	
-			dir = os.path.join(root, dir)
-			if not os.path.isdir(dir):
-				continue
-	
-			dir = PyDir.makeDirAbsolute(dir)		
-			if type == "apps":
-				found_dirs.append(PyDir.makeDirAbsolute(os.path.join(dir)))
-			else:
-				if os.path.basename(dir) == type:
-					found_dirs.append(PyDir.makeDirAbsolute(dir))
-				else:
-					found_dirs += getDirs(type, os.path.join(root, dir))
-		return found_dirs
-	except:
-		return []
 
 def makeRepoTuple(repository):
 	repo_tuple    = PyErl.PyErlTuple()
@@ -56,125 +29,6 @@ def makeRepoTuple(repository):
 			repo_tuple.appendChild(PyErl.PyErlString(repository["Branch"]))
 	return repo_tuple
 
-def genConfigFile():
-	doc         = PyErl.PyErlDocument()
-	expressions = PyErl.PyErlList()
-	config_file = os.path.join(PyConfig["INSTALL_DIR"], "etc/" + PyConfig["APP_MAIN"] + ".config.default")
-	for app_dir in PyConfig["APP_DIRS"]:
-		app        = os.path.basename(app_dir)
-		app_config = os.path.join(app_dir, "etc/" + app + ".config")
-		if os.path.isfile(app_config):
-			terms = PyErl.parse_file(app_config)
-			expressions.appendChild(terms)
-
-	doc.appendChild(expressions)
-	PyErl.write_file(config_file, doc)
-
-## gen_cookie(dict()) -> None
-## Generates the cookie file
-def genCookie():
-	file_name = PyDir.makeDirAbsolute(os.path.join(PyConfig["INSTALL_DIR"], "var/run/.cookie"))
-	
-	try:
-		os.remove(file_name)
-	except OSError, e:
-		pass
-
-	file = open(file_name, "w")
-	file.write(PyConfig["APP_COOKIE"])
-	file.close()
-	PyUtil.shell("chmod a-x "  + file_name)
-	PyUtil.shell("chmod a-w "  + file_name)
-	PyUtil.shell("chmod og-r " + file_name)
-
-## Look at the applications entry of the app.
-## If we have app.app in our intall directory then
-## get it's apps as well.
-## If we don't assume it's a native app.
-def getApps(app):
-	apps = []
-	
-	app_file = PyDir.find(app + ".app", PyConfig["INSTALL_DIR"])
-	if not app_file:
-		app_file = PyDir.find(app + ".app", "/usr/lib/erlang") ## Search in a nix install
-		if not app_file:
-			app_file = PyDir.find(app + ".app", "/usr/local/lib/erlang") ## Search in an OSX install
-			if not app_file:
-				return [app]
-
-	(doc, ) = PyErl.parse_file(app_file),
-
-	tuples = doc.getElementsByTagName("tuple")
-	tuple = None
-	for ttuple in tuples:
-		if ttuple[0].to_string() == "applications":
-			tuple = ttuple
-			break
-
-	if tuple == None:
-		return [app]
-
-	for dapp in tuple[1]:
-		tapps = getApps(dapp.to_string())
-		for tapp in tapps:
-			if not tapp in apps:
-				 apps.append(tapp)
-	apps.append(app)
-	return apps
-
-## gen_shell_script(dict()) -> None
-## Generates a shell script that will start the system
-## or attach to a runnign node.
-def genShellScript():
-	install_dir = PyDir.makeDirAbsolute(PyConfig["INSTALL_DIR"])
-
-	start_apps  = ""
-	apps        = getApps(PyConfig["APP_MAIN"])
-
-	for app in apps:
-		start_apps += "-eval \"application:start(" + app + ")\" "
-
-	cookie_file = os.path.join(install_dir, "var/run/.cookie")
-	file_name   = os.path.join(install_dir, "bin/" + PyConfig["APP_NAME"])
-	erl_dirs    = os.path.join(install_dir, "lib/erlang/lib/*/ebin")
-	erl_deps    = os.path.join(install_dir, "lib/erlang/lib/*/deps/*/ebin")
-	config_file = os.path.join(install_dir, "etc/" + PyConfig["APP_NAME"] + ".config")
-	file        = open(file_name, "w")
-	file.write("#! /bin/bash\n")
-	file.write("erl -pa " + erl_dirs + " -pa " + erl_deps + " -name " + PyConfig["APP_NAME"] +  "@`hostname -f` -setcookie \"`cat " + cookie_file + "`\" -config " + config_file +  " " + start_apps)
-	file.close()
-	PyUtil.shell("chmod a+x " + file_name)
-
-
-def genShellConnectScript():
-	install_dir = PyDir.makeDirAbsolute(PyConfig["INSTALL_DIR"])
-
-	cookie_file = os.path.join(install_dir, "var/run/.cookie")
-	file_name   = os.path.join(install_dir, "bin/" + PyConfig["APP_NAME"] + "-connect")
-	erl_dirs    = os.path.join(install_dir, "lib/erlang/lib/*/ebin")
-	erl_deps    = os.path.join(install_dir, "lib/erlang/lib/*/debs/*/ebin")
-
-	file        = open(file_name, "w")
-	file.write("#! /bin/bash\n")
-	file.write("erl -remsh " + PyConfig["APP_NAME"] + "@`hostname -f` -pa " + erl_dirs + " -pa " + erl_deps + " -name " + PyConfig["APP_NAME"] + "-shell-$$ -setcookie \"`cat " + cookie_file + "`\"")
-	file.close()
-	PyUtil.shell("chmod a+x " + file_name)
-
-def genShellEnvScript():
-	install_dir = PyDir.makeDirAbsolute(PyConfig["INSTALL_DIR"])
-	
-	cookie_file = os.path.join(install_dir, "var/run/.cookie")
-	file_name   = os.path.join(install_dir, "bin/" + PyConfig["APP_NAME"] + "-env")
-	erl_dirs    = os.path.join(install_dir, "lib/erlang/lib/*/ebin")
-	erl_deps    = os.path.join(install_dir, "lib/erlang/lib/*/debs/*/ebin")
-	config_file = os.path.join(install_dir, "etc/" + PyConfig["APP_NAME"] + ".config")
-
-	file        = open(file_name, "w")
-	file.write("#! /bin/bash\n")
-	file.write("erl -pa " + erl_dirs + " -pa " + erl_deps + " -name " + PyConfig["APP_NAME"] + "-shell-$$ -setcookie \"`cat " + cookie_file + "`\" -config " + config_file)
-	file.close()
-	PyUtil.shell("chmod a+x " + file_name)
-
 ## clean() -> integer()
 ## Cleans the copiled bits.
 def clean():
@@ -189,6 +43,7 @@ def compile():
 	print "Compiling"
 	res = 0
 
+	print PyConfig["COMPILERS"]
 	for app_dir in PyConfig["COMPILERS"]:
 		print "==>", os.path.basename(app_dir)
 
@@ -230,11 +85,10 @@ def install():
 		doc_dir  = PyDir.makeDirAbsolute(os.path.join(app_dir, "doc"))
 		var_dir  = PyDir.makeDirAbsolute(os.path.join(app_dir, "var"))
 
-		print "==> Installing", basename
+		print "==>", basename
 
 		if app_dir in PyConfig["COMPILERS"]:
 			for compiler in PyConfig["COMPILERS"][app_dir]:
-				print "==>"
 				res = compiler.install(app_dir)
 				if not res == 0:
 					print "Problem installing ", app_dir, res
@@ -253,7 +107,7 @@ def install():
 	
 	print "==> Installing dependencies"
 	## Create the Dependencies
-	dep_dirs    = getDirs("apps", "deps")
+	dep_dirs    = PyDir.findDirsByName("apps", "deps")
 	for dep_dir in dep_dirs:
 		dep = os.path.basename(dep_dir)
 		install_erl_dir = PyDir.makeDirAbsolute(os.path.join(PyConfig["INSTALL_DIR"], "lib/erlang/lib/" + dep))
@@ -273,18 +127,10 @@ def install():
 			if os.path.exists(src_dir):
 				shutil.copytree(src_dir, erl_dir)
 
+	for compiler in fishmake.compilers:
+		compiler.systemInstall()
+
 	print "==> Dependencies installed"
-	print "==> Generating scripts"
-	genShellScript()
-	genShellConnectScript()
-	genShellEnvScript()
-	print "==> Scripts generated"
-	print "==> Baking cookie"
-	genCookie()
-	print "==> Cookie baked"
-	print "==> Generating configuration file"
-	genConfigFile()
-	print "==> Configuration file generated"
 	print "==> Reticulating splines"
 	print "==> Splines reticulated"
 
@@ -292,7 +138,7 @@ def install():
 ## Explores the SRC_DIR directory and generates the appropriate
 ##     rebar config
 def configure():
-	PyConfig["APP_DIRS"]      = PyConfig["APP_DIRS"].split(":") + getDirs("apps")
+	PyConfig["APP_DIRS"]      = PyConfig["APP_DIRS"].split(":") + PyDir.getAppDirs(PyConfig["SRC_DIR"])
 	
 	PyConfig["LIB_DIRS"]      = PyConfig["LIB_DIRS"].split(":")
 	PyConfig["INCLUDE_DIRS"]  = PyConfig["INCLUDE_DIRS"].split(":")
@@ -307,18 +153,16 @@ def configure():
 					PyConfig["EXT_DEPS"].append(dir)
 
 	## Get the include dirs for this project.
-	dirs = getDirs("include")
+	dirs = PyDir.findDirsByName("include", PyConfig["SRC_DIR"])
 	for dir in PyConfig["LIB_DIRS"]:
-		dirs += getDirs("include", dir)
+		dirs += PyDir.findDirsByName("include", dir)
 	for dir in PyConfig["EXT_DEPS"]:
-		dirs += getDirs("include", dir)
+		dirs += PyDir.findDirsByName("include", dir)
 	PyConfig["INCLUDE_DIRS"] += dirs
 
 	## Detect compilers to use
 	compilers = {}
-
-	print fishmake.compilers
-
+	print PyConfig["APP_DIRS"]
 	for app_dir in PyConfig["APP_DIRS"]:
 		if app_dir == "":
 			continue
@@ -333,6 +177,7 @@ def configure():
 				types = compiler.getFileTypes()
 			except:
 				types = []
+			print PyDir.findFilesByExts(types, src_dir), types, src_dir
 			if PyDir.findFilesByExts(types, src_dir):
 				tcompilers.append(compiler)
 		compilers[app_dir] = tcompilers
@@ -341,7 +186,6 @@ def configure():
 
 def main():
 	configure()
-	print PyConfig
 	if   PyConfig[0] == "clean":
 		return clean()
 	elif PyConfig[0] == "compile":

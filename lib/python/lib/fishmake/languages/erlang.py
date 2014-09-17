@@ -4,6 +4,7 @@ import pyerl       as PyErl
 import pybase.util as PyUtil
 import pybase.dir  as PyDir
 import os.path
+import shutil
 
 ## Directories found in a built erlang src dir.
 dirs  = ["ebin", "priv"]
@@ -71,7 +72,7 @@ class ErlApp():
 		
 ## Looks in each app dir for a $APP.app.fish file
 ## uses it to generate a .app
-def genApp(path, config):
+def genApp(path):
 	app      = os.path.basename(path)
 	app_src  = os.path.join(path, "src/"  + app + ".app.fish")
 	app_file = os.path.join(path, "ebin/" + app + ".app")
@@ -79,6 +80,119 @@ def genApp(path, config):
 	if os.path.isfile(app_src):
 		doc  = ErlApp(app_src)
 		doc.write(app_file)
+
+## gen_shell_script(dict()) -> None
+## Generates a shell script that will start the system
+## or attach to a runnign node.
+def genShellScript(install_dir, app_name, app_main):
+	start_apps  = ""
+	apps        = getApps(app_main)
+
+	for app in apps:
+		start_apps += "-eval \"application:start(" + app + ")\" "
+
+	cookie_file = os.path.join(install_dir, "var/run/.cookie")
+	file_name   = os.path.join(install_dir, "bin/" + app_name)
+	erl_dirs    = os.path.join(install_dir, "lib/erlang/lib/*/ebin")
+	erl_deps    = os.path.join(install_dir, "lib/erlang/lib/*/deps/*/ebin")
+	config_file = os.path.join(install_dir, "etc/" + app_name + ".config")
+	file        = open(file_name, "w")
+	file.write("#! /bin/bash\n")
+	file.write("erl -pa " + erl_dirs + " -pa " + erl_deps + " -name " + app_name +  "@`hostname -f` -setcookie \"`cat " + cookie_file + "`\" -config " + config_file +  " " + start_apps)
+	file.close()
+	PyUtil.shell("chmod a+x " + file_name)
+
+
+def genShellConnectScript(install_dir, app_name):
+	cookie_file = os.path.join(install_dir, "var/run/.cookie")
+	file_name   = os.path.join(install_dir, "bin/" + app_name + "-connect")
+	erl_dirs    = os.path.join(install_dir, "lib/erlang/lib/*/ebin")
+	erl_deps    = os.path.join(install_dir, "lib/erlang/lib/*/debs/*/ebin")
+
+	file        = open(file_name, "w")
+	file.write("#! /bin/bash\n")
+	file.write("erl -remsh " + app_name + "@`hostname -f` -pa " + erl_dirs + " -pa " + erl_deps + " -name " + app_name + "-shell-$$ -setcookie \"`cat " + cookie_file + "`\"")
+	file.close()
+	PyUtil.shell("chmod a+x " + file_name)
+
+def genShellEnvScript(install_dir, app_name):
+	cookie_file = os.path.join(install_dir, "var/run/.cookie")
+	file_name   = os.path.join(install_dir, "bin/" + app_name + "-env")
+	erl_dirs    = os.path.join(install_dir, "lib/erlang/lib/*/ebin")
+	erl_deps    = os.path.join(install_dir, "lib/erlang/lib/*/debs/*/ebin")
+	config_file = os.path.join(install_dir, "etc/" + app_name + ".config")
+
+	file        = open(file_name, "w")
+	file.write("#! /bin/bash\n")
+	file.write("erl -pa " + erl_dirs + " -pa " + erl_deps + " -name " + app_name + "-shell-$$ -setcookie \"`cat " + cookie_file + "`\" -config " + config_file)
+	file.close()
+	PyUtil.shell("chmod a+x " + file_name)
+
+## gen_cookie(dict()) -> None
+## Generates the cookie file
+def genCookie():
+	file_name = PyDir.makeDirAbsolute(os.path.join(PyConfig["INSTALL_DIR"], "var/run/.cookie"))
+	
+	try:
+		os.remove(file_name)
+	except OSError, e:
+		pass
+
+	file = open(file_name, "w")
+	file.write(PyConfig["APP_COOKIE"])
+	file.close()
+	PyUtil.shell("chmod a-x "  + file_name)
+	PyUtil.shell("chmod a-w "  + file_name)
+	PyUtil.shell("chmod og-r " + file_name)
+
+def genConfigFile():
+	doc         = PyErl.PyErlDocument()
+	expressions = PyErl.PyErlList()
+	config_file = os.path.join(PyConfig["INSTALL_DIR"], "etc/" + PyConfig["APP_MAIN"] + ".config.default")
+	for app_dir in PyConfig["APP_DIRS"]:
+		app        = os.path.basename(app_dir)
+		app_config = os.path.join(app_dir, "etc/" + app + ".config")
+		if os.path.isfile(app_config):
+			terms = PyErl.parse_file(app_config)
+			expressions.appendChild(terms)
+
+	doc.appendChild(expressions)
+	PyErl.write_file(config_file, doc)
+
+## Look at the applications entry of the app.
+## If we have app.app in our intall directory then
+## get it's apps as well.
+## If we don't assume it's a native app.
+def getApps(app):
+	apps = []
+	
+	app_file = PyDir.find(app + ".app", PyConfig["INSTALL_DIR"])
+	if not app_file:
+		app_file = PyDir.find(app + ".app", "/usr/lib/erlang") ## Search in a nix install
+		if not app_file:
+			app_file = PyDir.find(app + ".app", "/usr/local/lib/erlang") ## Search in an OSX install
+			if not app_file:
+				return [app]
+
+	(doc, ) = PyErl.parse_file(app_file),
+
+	tuples = doc.getElementsByTagName("tuple")
+	tuple = None
+	for ttuple in tuples:
+		if ttuple[0].to_string() == "applications":
+			tuple = ttuple
+			break
+
+	if tuple == None:
+		return [app]
+
+	for dapp in tuple[1]:
+		tapps = getApps(dapp.to_string())
+		for tapp in tapps:
+			if not tapp in apps:
+				 apps.append(tapp)
+	apps.append(app)
+	return apps
 
 def compile(path):
 	print "====> Erlang"
@@ -94,29 +208,44 @@ def compile(path):
 	if not os.path.isdir(output_dir):
 		os.mkdir(output_dir)
 		
-	genApp(path, config)
+	print "======> Generating application config"
+	genApp(path)
+	print "======> Application config generated."
+	print "======> Compiling *.erl to *.beam"
 	cmd = "erlc " + includes + "-o " + output_dir + " " + os.path.join(path, "src/*.erl")
+	print "======> Beams generated"
 	return PyUtil.shell(cmd)
 
-def install(path):
+def systemInstall():
+	print "====> Generating statup scripts..."
+	genShellScript(       PyConfig["INSTALL_DIR"], PyConfig["APP_NAME"], PyConfig["APP_MAIN"])
+	genShellConnectScript(PyConfig["INSTALL_DIR"], PyConfig["APP_NAME"])
+	genShellEnvScript(    PyConfig["INSTALL_DIR"], PyConfig["APP_NAME"])
+	print "====> Statup scripts generated..."
+	print "====> Baking cookie"
+	genCookie()
+	print "====> Cookie baked"
+
+def appInstall(path):
 	basename        = os.path.basename(path)
 	install_erl_dir = PyDir.makeDirAbsolute(os.path.join(PyConfig["INSTALL_DIR"], "lib/erlang/lib/" + basename + "-" + PyConfig["APP_VERSION"]))
 		
 	print "====> Copying Erlang binaries..."
-		## Clear conflicting versions
-		if os.path.exists(install_erl_dir):
-			PyUtil.shell("rm -rf " + install_erl_dir)
-		
-		## Create the erlang lib directory
-		if not os.path.exists(install_erl_dir):
-			os.makedirs(install_erl_dir)
+	## Clear conflicting versions
+	if os.path.exists(install_erl_dir):
+		PyUtil.shell("rm -rf " + install_erl_dir)
+	
+	## Create the erlang lib directory
+	if not os.path.exists(install_erl_dir):
+		os.makedirs(install_erl_dir)
 
-		for erl_dir in dirs:
-			src_dir = os.path.join(path, erl_dir)
-			erl_dir = os.path.join(install_erl_dir, erl_dir)
-			if os.path.exists(src_dir):
-				shutil.copytree(src_dir, erl_dir)
+	for erl_dir in dirs:
+		src_dir = os.path.join(path, erl_dir)
+		erl_dir = os.path.join(install_erl_dir, erl_dir)
+		if os.path.exists(src_dir):
+			shutil.copytree(src_dir, erl_dir)
 	print "====> Erlang binaries copied!"
+
 	return 0
 
 def doc(path):
