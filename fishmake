@@ -1,33 +1,8 @@
 #! /usr/bin/python
-
 import fishmake
-
 from   pybase.config import Config as PyConfig
-import pybase.util   as PyUtil
-import pybase.dir    as PyDir
-import pybase.git    as PyGit
-
-import pyerl         as PyErl
-
-import os, os.path, sys, subprocess, shutil
 
 PyConfig.init(".fishmake", fishmake.Defaults)
-
-
-
-def makeRepoTuple(repository):
-	repo_tuple    = PyErl.PyErlTuple()
-	repo_tuple.appendChild(PyErl.PyErlAtom(repository["Type"]))
-	repo_tuple.appendChild(PyErl.PyErlString(repository["URL"]))
-	if "Branch" in repository:
-		if type(repository["Branch"]) is dict:
-			branch_tuple    = PyErl.PyErlTuple()
-			branch_tuple.appendChild(PyErl.PyErlAtom(repository["Branch"]["Type"]))
-			branch_tuple.appendChild(PyErl.PyErlString(repository["Branch"]["Revision"]))
-			repo_tuple.appendChild(branch_tuple)
-		else:
-			repo_tuple.appendChild(PyErl.PyErlString(repository["Branch"]))
-	return repo_tuple
 
 ## clean() -> integer()
 ## Cleans the copiled bits.
@@ -36,162 +11,14 @@ def clean():
 	
 	return Res
 
-## compile(string()) -> integer()
-## Takes the text for the rebar config file and compiles the system with it.
-## returns the success/fail code.
-def compile():
-	print "Compiling"
-	res = 0
-
-	print PyConfig["COMPILERS"]
-	for app_dir in PyConfig["COMPILERS"]:
-		print "==>", os.path.basename(app_dir)
-
-		src_dir = os.path.join(app_dir, "src")
-
-		types = []
-		for compiler in PyConfig["COMPILERS"][app_dir]:
-			res = compiler.compile(app_dir)
-			if not res == 0:
-				return res	
-
-	print "Compilation done"
-
-	return res
-
-## build(dict()) -> integer()
-## Builds the compiled code into an app hierarchy
-def install():
-	if not PyConfig.verify(["APP_NAME", "APP_MAIN", "APP_COOKIE"]):
-		print "Error in configuration. Unable to install"
-		return 255
-
-	print "Installing", PyConfig["APP_NAME"]
-
-	print "==> Making directories..."
-	for nix_dir in fishmake.NIXDirs:
-		tnix_dir = PyDir.makeDirAbsolute(os.path.join(PyConfig["INSTALL_DIR"], nix_dir))
-		if not os.path.exists(tnix_dir):
-			os.makedirs(tnix_dir)
-	print "==> Directories made..."
-
-	install_bin_dir = PyDir.makeDirAbsolute(os.path.join(PyConfig["INSTALL_DIR"], "bin"))
-	install_lib_dir = PyDir.makeDirAbsolute(os.path.join(PyConfig["INSTALL_DIR"], "lib"))
-	install_var_dir = PyDir.makeDirAbsolute(os.path.join(PyConfig["INSTALL_DIR"], "var"))
-
-	for app_dir in PyConfig["APP_DIRS"]:
-		basename = os.path.basename(app_dir)
-		bin_dir  = PyDir.makeDirAbsolute(os.path.join(app_dir, "bin"))
-		doc_dir  = PyDir.makeDirAbsolute(os.path.join(app_dir, "doc"))
-		var_dir  = PyDir.makeDirAbsolute(os.path.join(app_dir, "var"))
-
-		print "==>", basename
-
-		if app_dir in PyConfig["COMPILERS"]:
-			for compiler in PyConfig["COMPILERS"][app_dir]:
-				res = compiler.install(app_dir)
-				if not res == 0:
-					print "Problem installing ", app_dir, res
-
-		print "====> Copying content..."
-		if os.path.exists(var_dir):
-			PyDir.copytree(var_dir, install_var_dir)
-		print "====> Content copied!"
-		
-		## Install documentation
-		if os.path.exists(doc_dir):
-			install_doc_dir = PyDir.makeDirAbsolute(os.path.join(PyConfig["INSTALL_DIR"], "doc/" + basename + "-" + PyConfig["APP_VERSION"]))
-			if os.path.exists(install_doc_dir):
-				PyUtil.shell("rm -rf " + install_doc_dir)
-			shutil.copytree(doc_dir, install_doc_dir)	
-	
-	print "==> Installing dependencies"
-	## Create the Dependencies
-	dep_dirs    = PyDir.findDirsByName("apps", "deps")
-	for dep_dir in dep_dirs:
-		dep = os.path.basename(dep_dir)
-		install_erl_dir = PyDir.makeDirAbsolute(os.path.join(PyConfig["INSTALL_DIR"], "lib/erlang/lib/" + dep))
-
-		## Create the erlang lib directory
-		if not os.path.exists(install_erl_dir):
-			os.makedirs(install_erl_dir)
-
-		print "==> Installing", dep
-		## Clear conflicting versions
-		if os.path.exists(install_erl_dir):
-			PyUtil.shell("rm -rf " + install_erl_dir)
-
-		for erl_dir in fishmake.ErlDirs:
-			src_dir = os.path.join(dep_dir, erl_dir)
-			erl_dir = os.path.join(install_erl_dir, erl_dir)
-			if os.path.exists(src_dir):
-				shutil.copytree(src_dir, erl_dir)
-
-	for compiler in fishmake.compilers:
-		compiler.systemInstall()
-
-	print "==> Dependencies installed"
-	print "==> Reticulating splines"
-	print "==> Splines reticulated"
-
-## configure() -> no_return()
-## Explores the SRC_DIR directory and generates the appropriate
-##     rebar config
-def configure():
-	PyConfig["APP_DIRS"]      = PyConfig["APP_DIRS"].split(":") + PyDir.getAppDirs(PyConfig["SRC_DIR"])
-	
-	PyConfig["LIB_DIRS"]      = PyConfig["LIB_DIRS"].split(":")
-	PyConfig["INCLUDE_DIRS"]  = PyConfig["INCLUDE_DIRS"].split(":")
-
-	PyConfig["EXT_DEPS"]      = PyConfig["EXT_DEPS"].split(":")
-
-	if os.path.isdir(PyConfig["EXT_DEPS_DIR"]):
-		for dir in os.listdir(PyConfig["EXT_DEPS_DIR"]):
-			dir = os.path.join(PyConfig["EXT_DEPS_DIR"], dir)
-			if os.path.isdir(dir):
-				if not dir in PyConfig["EXT_DEPS"]:
-					PyConfig["EXT_DEPS"].append(dir)
-
-	## Get the include dirs for this project.
-	dirs = PyDir.findDirsByName("include", PyConfig["SRC_DIR"])
-	for dir in PyConfig["LIB_DIRS"]:
-		dirs += PyDir.findDirsByName("include", dir)
-	for dir in PyConfig["EXT_DEPS"]:
-		dirs += PyDir.findDirsByName("include", dir)
-	PyConfig["INCLUDE_DIRS"] += dirs
-
-	## Detect compilers to use
-	compilers = {}
-	print PyConfig["APP_DIRS"]
-	for app_dir in PyConfig["APP_DIRS"]:
-		if app_dir == "":
-			continue
-
-		types      = []
-		tcompilers = []
-
-		src_dir = os.path.join(app_dir, "src")
-
-		for compiler in fishmake.compilers:
-			try:
-				types = compiler.getFileTypes()
-			except:
-				types = []
-			print PyDir.findFilesByExts(types, src_dir), types, src_dir
-			if PyDir.findFilesByExts(types, src_dir):
-				tcompilers.append(compiler)
-		compilers[app_dir] = tcompilers
-	PyConfig["COMPILERS"] = compilers
-
-
 def main():
-	configure()
+	fishmake.configure()
 	if   PyConfig[0] == "clean":
 		return clean()
 	elif PyConfig[0] == "compile":
-		compile()
+		fishmake.compile()
 	elif PyConfig[0] == "install":
-		install()
+		fishmake.install()
 	else:
 		print "Usage: fishmake <clean|compile|install>"
 

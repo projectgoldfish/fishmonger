@@ -1,9 +1,13 @@
+from fishmake.compiler  import compile   as compile
+from fishmake.configure import configure as configure
+from fishmake.installer import install   as install
+
 import fishmake.languages
 
-compilers = []
+usableLanguages = []
 for c in fishmake.languages.available():
-	a = __import__("fishmake.languages." + c)
-	exec("compilers.append(a.languages." + c + ")")
+	lang = __import__("fishmake.languages." + c)
+	exec("usableLanguages.append(lang.languages." + c + ")")
 
 import pybase.git    as PyGit
 
@@ -36,3 +40,4 @@ Defaults = [
 	("LIB_DIRS",         ""),
 	("SRC_DIR",          "src")
 ]
+
