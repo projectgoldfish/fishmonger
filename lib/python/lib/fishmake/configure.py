@@ -34,21 +34,17 @@ def configure():
 		dirs += PyDir.findDirsByName("include", dir)
 	PyConfig["INCLUDE_DIRS"] += dirs
 
-	## Detect languages to use
+	## Detect which apps need which langauges
 	languages = {}
-	for app_dir in PyConfig["APP_DIRS"]:
-		
-		types      = []
-		tlanguages = []
-
+	for language in fishmake.usableLanguages:
+		apps    = []
 		src_dir = os.path.join(app_dir, "src")
-
-		for compiler in fishmake.usableLanguages:
+		for app_dir in PyConfig["APP_DIRS"]:
 			try:
-				types = compiler.getFileTypes()
+				types = language.getFileTypes()
 			except:
 				types = []
 			if PyDir.findFilesByExts(types, src_dir):
-				tlanguages.append(compiler)
-		languages[app_dir] = tlanguages
+				apps.append()
+		languages[language] = apps
 	PyConfig["LANGUAGES"] = languages

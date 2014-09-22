@@ -1,5 +1,9 @@
 from pybase.config import Config as PyConfig
 
+import fishmake
+
+import pybase.config
+
 import os
 import os.path
 
@@ -7,7 +11,11 @@ def compile():
 	print "Compiling"
 	res = 0
 
-	for app_dir in PyConfig["LANGUAGES"]:
+	for language in PyConfig["LANGUAGES"]:
+		## Get per language configuration
+		config = 
+
+
 		print "==> Application ", os.path.basename(app_dir)
 
 		src_dir = os.path.join(app_dir, "src")
