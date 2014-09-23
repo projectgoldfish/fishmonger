@@ -1,4 +1,4 @@
-from   pybase.config import Config as PyConfig
+from   pybase.config import GlobalConfig as PyConfig
 import pybase.config
 import pyerl       as PyErl
 import pybase.util as PyUtil
@@ -8,6 +8,9 @@ import shutil
 
 ## Directories found in a built erlang src dir.
 dirs = ["ebin", "priv"]
+
+def configFile():
+	return ".fishmake.erlang"
 
 def getFileTypes():
 	return ["erl"]
@@ -79,7 +82,7 @@ def genApp(path):
 		doc  = ErlApp(app_src)
 		doc.write(app_file)
 
-def compile(path):
+def compile(app, path, config):
 	print "====> Erlang"
 	config = pybase.config.merge(PyConfig, pybase.config.parse(".fishmake.erl"))
 	

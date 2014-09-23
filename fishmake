@@ -1,6 +1,6 @@
 #! /usr/bin/python
 import fishmake
-from   pybase.config import Config as PyConfig
+from   pybase.config import GlobalConfig as PyConfig
 
 PyConfig.init(".fishmake", fishmake.Defaults)
 

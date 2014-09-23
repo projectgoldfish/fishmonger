@@ -1,4 +1,4 @@
-from pybase.config import Config as PyConfig
+from pybase.config import GlobalConfig as PyConfig
 
 import os
 import os.path

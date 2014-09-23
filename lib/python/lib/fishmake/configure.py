@@ -1,4 +1,4 @@
-from pybase.config import Config as PyConfig
+from pybase.config import GlobalConfig as PyConfig
 
 import os
 import os.path
@@ -38,13 +38,13 @@ def configure():
 	languages = {}
 	for language in fishmake.usableLanguages:
 		apps    = []
-		src_dir = os.path.join(app_dir, "src")
 		for app_dir in PyConfig["APP_DIRS"]:
+			src_dir = os.path.join(app_dir, "src")
 			try:
 				types = language.getFileTypes()
 			except:
 				types = []
 			if PyDir.findFilesByExts(types, src_dir):
-				apps.append()
+				apps.append(app_dir)
 		languages[language] = apps
 	PyConfig["LANGUAGES"] = languages

@@ -1,4 +1,4 @@
-from pybase.config import Config as PyConfig
+from pybase.config import GlobalConfig as PyConfig
 
 import fishmake
 
@@ -7,25 +7,36 @@ import pybase.config
 import os
 import os.path
 
+def getBuildOrder(config):
+	tconfig = []
+	return config
+
 def compile():
 	print "Compiling"
 	res = 0
 
+	config = {}
+
+	## For every available language
 	for language in PyConfig["LANGUAGES"]:
-		## Get per language configuration
-		config = 
 
+		## Get per app configuration
 
-		print "==> Application ", os.path.basename(app_dir)
+		for app in PyConfig["APP_DIRS"]:
+			print "==> Application", os.path.basename(app)
+			tconfig = PyConfig.clone()
+			tconfig.merge(pybase.config.parseFile(os.path.join(app, language.configFile())))
+			config[app] = tconfig
+		## Resolve build order dependencies
+		print config
+		config = getBuildOrder(config)
 
-		src_dir = os.path.join(app_dir, "src")
-
-		types = []
-		for compiler in PyConfig["LANGUAGES"][app_dir]:
-			res = compiler.compile(app_dir)
-			if not res == 0:
-				return res	
-
+		## Build the app
+		for (app, app_dir, app_config) in config:
+			res = language.compile(app, app_dir, app_config)
+			if res != 0:
+				return 1
+				
 	print "Compilation done"
 
 	return res

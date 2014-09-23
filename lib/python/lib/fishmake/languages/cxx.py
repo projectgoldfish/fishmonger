@@ -1,6 +1,9 @@
-from   pybase.config import Config as PyConfig
+from   pybase.config import GlobalConfig as PyConfig
 import pybase.config
 import os.path
+
+def configFile():
+	return ".fishmake.cxx"
 
 def getFileTypes():
 	return ["c", "cpp"]
