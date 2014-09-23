@@ -1,6 +1,6 @@
 def available():
 	return [
-		"cxx",
-		"erlang",
-		"js"
+	#	"cxx",
+		"erlang"
+	#	"js"
 	]

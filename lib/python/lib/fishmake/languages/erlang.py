@@ -1,4 +1,3 @@
-from   pybase.config import GlobalConfig as PyConfig
 import pybase.config
 import pyerl       as PyErl
 import pybase.util as PyUtil
@@ -6,14 +5,7 @@ import pybase.dir  as PyDir
 import os.path
 import shutil
 
-## Directories found in a built erlang src dir.
-dirs = ["ebin", "priv"]
-
-def configFile():
-	return ".fishmake.erlang"
-
-def getFileTypes():
-	return ["erl"]
+ErlConfig = None
 
 class ErlApp():
 	def __init__(self, file):
@@ -55,7 +47,7 @@ class ErlApp():
 
 		version_tuple = PyErl.PyErlTuple()
 		version_tuple.appendChild(PyErl.PyErlAtom("vsn"))
-		version_tuple.appendChild(PyErl.PyErlString(PyConfig["APP_VERSION"]))
+		version_tuple.appendChild(PyErl.PyErlString(ErlConfig["APP_VERSION"]))
 		arg_list.appendChild(version_tuple)
 	
 	def addId(self):
@@ -68,7 +60,7 @@ class ErlApp():
 
 		id_tuple = PyErl.PyErlTuple()
 		id_tuple.appendChild(PyErl.PyErlAtom("id"))
-		id_tuple.appendChild(PyErl.PyErlString(PyConfig["APP_ID"]))
+		id_tuple.appendChild(PyErl.PyErlString(ErlConfig["APP_ID"]))
 		arg_list.appendChild(id_tuple)
 		
 ## Looks in each app dir for a $APP.app.fish file
@@ -82,9 +74,34 @@ def genApp(path):
 		doc  = ErlApp(app_src)
 		doc.write(app_file)
 
-def compile(app, path, config):
+## What follows is the fishmake language api
+## All of the following variables and functions must be made available.
+
+## Generate language specific configuration
+## Return true if we are used, false if not
+def configure(config):
+	ErlConfig = config.clone()
+	ErlConfig.merge(pybase.config.parse(".fishmake.erl"))
+
+	apps = []
+	for app_dir in ErlConfig["APP_DIRS"]:
+		src_dir = os.path.join(os.path.join(ErlConfig["SRC_DIR"], app_dir), "src")
+		print src_dir
+		if PyDir.findFilesByExts(["erl"], src_dir):
+			## We use this language in this app.
+			## try to generate the app specific config
+			app_config = ErlConfig.clone()
+			app_config.merge(os.path.join(app_dir, ".fishmake.erl"))
+			apps.append((os.path.basename(), app_dir, app_config))
+
+	ErlConfig["APP_CONFIG"] = apps
+
+	print apps
+
+	return apps != []
+
+def compile(path):
 	print "====> Erlang"
-	config = pybase.config.merge(PyConfig, pybase.config.parse(".fishmake.erl"))
 	
 	includes = " "
 	for include in config["INCLUDE_DIRS"]:
@@ -106,7 +123,7 @@ def compile(app, path, config):
 
 def install(path):
 	basename        = os.path.basename(path)
-	install_erl_dir = PyDir.makeDirAbsolute(os.path.join(PyConfig["INSTALL_DIR"], "lib/erlang/lib/" + basename + "-" + PyConfig["APP_VERSION"]))
+	install_erl_dir = PyDir.makeDirAbsolute(os.path.join(ErlConfig["INSTALL_DIR"], "lib/erlang/lib/" + basename + "-" + ErlConfig["APP_VERSION"]))
 	
 	print "====> Erlang"	
 	print "======> Copying binaries..."
@@ -118,7 +135,7 @@ def install(path):
 	if not os.path.exists(install_erl_dir):
 		os.makedirs(install_erl_dir)
 
-	for erl_dir in dirs:
+	for erl_dir in ["ebin", "priv"]:
 		src_dir = os.path.join(path, erl_dir)
 		erl_dir = os.path.join(install_erl_dir, erl_dir)
 		if os.path.exists(src_dir):

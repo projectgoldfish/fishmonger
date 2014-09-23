@@ -1,13 +1,17 @@
-from fishmake.compiler  import compile   as compile
-from fishmake.configure import configure as configure
-from fishmake.installer import install   as install
-
 import fishmake.languages
 
-usableLanguages = []
+import os
+import os.path
+
+import pybase.dir as PyDir
+
+from pybase.config import GlobalConfig as PyConfig
+from fishmake.installer import install   as install
+
+Languages = []
 for c in fishmake.languages.available():
 	lang = __import__("fishmake.languages." + c)
-	exec("usableLanguages.append(lang.languages." + c + ")")
+	exec("Languages.append(lang.languages." + c + ")")
 
 import pybase.git    as PyGit
 
@@ -31,7 +35,8 @@ Defaults = [
 	## Erlang
 	("ERL_VERSION",      "16"),
 	("EXT_DEPS",         ""),
-	("EXT_DEPS_DIR",     "deps"),
+	("DEP_DIR",          "deps"),
+	("DEP_DIRS",         ""),
 
 	## General
 	("INCLUDE_DIRS",     ""),
@@ -41,3 +46,43 @@ Defaults = [
 	("SRC_DIR",          "src")
 ]
 
+def compile():
+	print "Compiling"
+	res = 0
+
+	## For every available language
+	for language in PyConfig["LANGUAGES"]:
+		language.compile()
+				
+	print "Compilation done"
+	return res
+
+def configure():
+	PyConfig["SRC_DIR"]      = os.path.join(os.getcwd(),PyConfig["SRC_DIR"])
+	PyConfig["DEP_DIR"]      = os.path.join(os.getcwd(),PyConfig["DEP_DIR"])
+
+	PyConfig["APP_DIRS"]     = PyConfig["APP_DIRS"].split(":") + PyDir.getDirDirs(PyConfig["SRC_DIR"])
+	PyConfig["LIB_DIRS"]     = PyConfig["LIB_DIRS"].split(":")
+	PyConfig["INCLUDE_DIRS"] = PyConfig["INCLUDE_DIRS"].split(":")
+	PyConfig["DEP_DIRS"]     = PyConfig["DEP_DIRS"].split(":") + PyDir.getDirDirs(PyConfig["DEP_DIR"])
+
+	## Clear the possible ""
+	for arr in ["APP_DIRS", "LIB_DIRS", "INCLUDE_DIRS", "DEP_DIRS"]:
+		if "" in PyConfig[arr]:
+			PyConfig[arr].remove("")
+
+	## Get the include dirs for this project.
+	dirs = PyDir.findDirsByName("include", PyConfig["SRC_DIR"])
+	for dir in PyConfig["LIB_DIRS"]:
+		dirs += PyDir.findDirsByName("include", dir)
+	for dir in PyConfig["DEP_DIRS"]:
+		dirs += PyDir.findDirsByName("include", dir)
+	PyConfig["INCLUDE_DIRS"] += dirs
+
+	## Configure languages.
+	## Determine which we use/dont.
+	languages = []
+	for language in fishmake.Languages:
+		if language.configure(PyConfig):
+			languages.append(language)
+	PyConfig["LANGUAGES"] = languages
