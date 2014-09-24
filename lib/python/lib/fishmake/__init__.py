@@ -11,7 +11,7 @@ from fishmake.installer import install   as install
 Languages = []
 for c in fishmake.languages.available():
 	lang = __import__("fishmake.languages." + c)
-	exec("Languages.append(lang.languages." + c + ")")
+	exec("Languages.append(lang.languages." + c + ".toolChain())")
 
 import pybase.git    as PyGit
 
@@ -85,4 +85,19 @@ def configure():
 	for language in fishmake.Languages:
 		if language.configure(PyConfig):
 			languages.append(language)
+
 	PyConfig["LANGUAGES"] = languages
+
+def mkDirs():
+		print "====> Making directories..."
+		for nix_dir in fishmake.NIXDirs:
+			tnix_dir = PyDir.makeDirAbsolute(os.path.join(PyConfig["INSTALL_DIR"], nix_dir))
+			if not os.path.exists(tnix_dir):
+				os.makedirs(tnix_dir)
+		print "====> Directories made..."
+
+def install():
+	print "Installing"
+	mkDirs()
+	for language in PyConfig["LANGUAGES"]:
+		language.install()
