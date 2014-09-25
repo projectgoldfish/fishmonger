@@ -88,16 +88,16 @@ def configure():
 
 	PyConfig["LANGUAGES"] = languages
 
-def mkDirs():
-		print "====> Making directories..."
+def mkNixDirs():
+		print "==> Making directories..."
 		for nix_dir in fishmake.NIXDirs:
 			tnix_dir = PyDir.makeDirAbsolute(os.path.join(PyConfig["INSTALL_DIR"], nix_dir))
 			if not os.path.exists(tnix_dir):
 				os.makedirs(tnix_dir)
-		print "====> Directories made..."
+		print "==> Directories made..."
 
 def install():
 	print "Installing"
-	mkDirs()
+	mkNixDirs()
 	for language in PyConfig["LANGUAGES"]:
 		language.install()

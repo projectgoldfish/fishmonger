@@ -76,54 +76,6 @@ class toolChain():
 			doc  = self.ErlApp(app_src, self.config)
 			doc.write(app_file)
 
-	## What follows is the fishmake language api
-	## All of the following variables and functions must be made available.
-
-	## Generate language specific configuration
-	## Return true if we are used, false if not
-	def configure(self, config):
-		self.config = config.clone()
-		self.config.merge(pybase.config.parse(".fishmake.erl"))
-
-		apps = []
-		for app_dir in self.config["APP_DIRS"]:
-			src_dir = os.path.join(os.path.join(self.config["SRC_DIR"], app_dir), "src")
-			if PyDir.findFilesByExts(["erl"], src_dir):
-				## We use this language in this app.
-				## try to generate the app specific config
-				app_config = self.config.clone()
-				app_config.merge(pybase.config.parseFile(os.path.join(app_dir, ".fishmake.erl")))
-				apps.append((os.path.basename(app_dir), app_dir, app_config))
-
-		self.config["APP_CONFIG"] = apps
-		return apps != []
-
-	def compile(self):
-		print "====> Erlang"
-		includes = " "
-		for include in self.config["INCLUDE_DIRS"]:
-			if include == "":
-				continue
-			includes += "-I " + include + " "
-
-		res = 0
-		for app, app_dir, app_config in self.config["APP_CONFIG"]:
-			app_dir    = os.path.join("src", app_dir)
-			output_dir = os.path.join(app_dir, "ebin")
-			if not os.path.isdir(output_dir):
-				os.mkdir(output_dir)
-			print "======> Generating application config"
-			self.genApp(app_dir)
-			print "======> Application config generated."
-			print "======> Compiling *.erl to *.beam"
-			cmd = "erlc " + includes + "-o " + output_dir + " " + os.path.join(app_dir, "src/*.erl")
-			res = PyUtil.shell(cmd)
-			if res != 0:
-				print "======> Error compiling"
-				return res
-			print "======> Beams generated"
-		return res
-
 	## Look at the applications entry of the app.
 	## If we have app.app in our intall directory then
 	## get it's apps as well.
@@ -152,7 +104,7 @@ class toolChain():
 			return [app]
 
 		for dapp in tuple[1]:
-			tapps = getApps(dapp.to_string())
+			tapps = self.getApps(dapp.to_string())
 			for tapp in tapps:
 				if not tapp in apps:
 					 apps.append(tapp)
@@ -168,7 +120,7 @@ class toolChain():
 		install_dir = self.config["INSTALL_DIR"]
 
 		start_apps  = ""
-		apps        = getApps(app_main)
+		apps        = self.getApps(app_main)
 
 		for app in apps:
 			start_apps += "-eval \"application:start(" + app + ")\" "
@@ -258,16 +210,21 @@ class toolChain():
 			app_dir = os.path.join(self.config["SRC_DIR"], app_dir)
 			print "==> Installing app", app
 			
-			if app == self.config["APP_MAIN"] or app_config["EXECUTABLE"] == true:
+			if app == self.config["APP_MAIN"] or app_config["EXECUTABLE"] == True:
 				for step in main_steps:
 					step()
 
 			## copy binaries
-			install_erl_dir = os.path.join(self.config["INSTALL_DIR"], "lib/erlang/lib" + app + "-" + APP_VERSION)
+			install_erl_dir = os.path.join(self.config["INSTALL_DIR"], "lib/erlang/lib/" + app + "-" + self.config["APP_VERSION"])
 			if os.path.exists(install_erl_dir):
 				PyUtil.shell("rm -rf " + install_erl_dir)
+			for dir in ["priv", "ebin"]:
+				install_target = os.path.join(install_erl_dir, dir)
+				os.makedirs(install_target)
+				if os.path.isdir(os.path.join(app_dir, dir)):
+					PyDir.copytree(os.path.join(app_dir, dir), install_target)
 
-			installMisc(app)
+			self.installMisc(app)
 			print "==>", os.path.basename(app), "installed!"
 
 	def installMisc(self, path):
@@ -275,22 +232,79 @@ class toolChain():
 		var_dir  = PyDir.makeDirAbsolute(os.path.join(path, "var"))
 		doc_dir  = PyDir.makeDirAbsolute(os.path.join(path, "doc"))
 		
-		print "====> Installing documentation"
-		## Install documentation
-		if os.path.exists(doc_dir):
-			install_doc_dir = PyDir.makeDirAbsolute(os.path.join(self.config["INSTALL_DIR"], "doc/" + basename + "-" + self.config["APP_VERSION"]))
-			if os.path.exists(install_doc_dir):
-				PyUtil.shell("rm -rf " + install_doc_dir)
-			shutil.copytree(doc_dir, install_doc_dir)
-		print "====> Documentation installed"
-
 		print "====> Copying variable content..."
 		if os.path.exists(var_dir):
 			PyDir.copytree(var_dir, install_var_dir)
 		print "====> Variable content copied!"
 
+	def installShellScripts(self):
+		main_steps = [self.genShellScript, self.genShellEnvScript, self.genShellConnectScript]
+		for app, app_dir, app_config in self.config["APP_CONFIG"]:
+			app_dir = os.path.join(self.config["SRC_DIR"], app_dir)
+				
+			if app == self.config["APP_MAIN"] or app_config["EXECUTABLE"] == True:
+				print "====> Installing shell scripts"
+				for step in main_steps:
+					step()
+
 	def installDependencies(self):
 		pass
+
+	def installDoc(self):
+		doc_dir = os.path.join(self.config["INSTALL_DIR"], "doc/erlang")
+		print "==> Installing documentation..."
+		for app, app_dir, app_config in self.config["APP_CONFIG"]:
+			target_dir = os.path.join(doc_dir, app + "-" + self.config["APP_VERSION"])
+			PyUtil.shell("erl -noshell -run edoc_run application '" + app + "' '\"" + app_dir + "\"' '[{dir, \"" + target_dir + "\"}]'")
+		print "==> Documentation installed!"
+
+	## What follows is the fishmake language api
+	## All of the following variables and functions must be made available.
+
+	## Generate language specific configuration
+	## Return True if we are used, false if not
+	def configure(self, config):
+		self.config = config.clone()
+		self.config.merge(pybase.config.parse(".fishmake.erl", {"EXECUTABLE" : False, "INSTALL_DOC" : True}))
+
+		apps = []
+		for app_dir in self.config["APP_DIRS"]:
+			src_dir = os.path.join(os.path.join(self.config["SRC_DIR"], app_dir), "src")
+			if PyDir.findFilesByExts(["erl"], src_dir):
+				## We use this language in this app.
+				## try to generate the app specific config
+				app_config = self.config.clone()
+				app_config.merge(pybase.config.parseFile(os.path.join(app_dir, ".fishmake.erl")))
+				apps.append((os.path.basename(app_dir), app_dir, app_config))
+
+		self.config["APP_CONFIG"] = apps
+		return apps != []
+
+	def compile(self):
+		print "=> Erlang"
+		includes = " "
+		for include in self.config["INCLUDE_DIRS"]:
+			if include == "":
+				continue
+			includes += "-I " + include + " "
+
+		res = 0
+		for app, app_dir, app_config in self.config["APP_CONFIG"]:
+			app_dir    = os.path.join("src", app_dir)
+			output_dir = os.path.join(app_dir, "ebin")
+			if not os.path.isdir(output_dir):
+				os.mkdir(output_dir)
+			print "==> Generating application config"
+			self.genApp(app_dir)
+			print "==> Application config generated."
+			print "==> Compiling *.erl to *.beam"
+			cmd = "erlc " + includes + "-o " + output_dir + " " + os.path.join(app_dir, "src/*.erl")
+			res = PyUtil.shell(cmd)
+			if res != 0:
+				print "==> Error compiling"
+				return res
+			print "==> Beams generated"
+		return res
 
 	def install(self):
 		install_dir = os.path.join(self.config["INSTALL_DIR"], "lib/erlang/lib")
@@ -298,7 +312,11 @@ class toolChain():
 			os.makedirs(install_dir)
 		self.installSystem()
 		self.installApps()
+		self.installShellScripts()
 		self.installDependencies()
+		if self.config["INSTALL_DOC"]:
+			self.installDoc()
+
 		return 0
 
 	def doc(self):
