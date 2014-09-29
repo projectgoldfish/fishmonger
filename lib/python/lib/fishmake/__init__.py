@@ -1,4 +1,4 @@
-import fishmake.languages
+import fishmake.toolchains
 
 import os
 import os.path
@@ -9,9 +9,9 @@ from pybase.config import GlobalConfig as PyConfig
 from fishmake.installer import install   as install
 
 Languages = []
-for c in fishmake.languages.available():
-	lang = __import__("fishmake.languages." + c)
-	exec("Languages.append(lang.languages." + c + ".toolChain())")
+for c in fishmake.toolchains.available():
+	lang = __import__("fishmake.toolchains." + c)
+	exec("Languages.append(lang.toolchains." + c + ".toolChain())")
 
 import pybase.git    as PyGit
 
