@@ -4,22 +4,18 @@ from   pybase.config import GlobalConfig as PyConfig
 
 PyConfig.init(".fishmake", fishmake.Defaults)
 
-## clean() -> integer()
-## Cleans the copiled bits.
-def clean():
-	print "Cleaning"
-	
-	return Res
-
 def main():
 	fishmake.configure()
 	if   PyConfig[0] == "clean":
-		return clean()
+		return fishmake.clean()
 	elif PyConfig[0] == "compile":
-		fishmake.compile()
+		return fishmake.compile()
 	elif PyConfig[0] == "install":
-		fishmake.install()
+		return fishmake.install()
+	elif PyConfig[0] == "doc":
+		return fishmake.doc()
 	else:
 		print "Usage: fishmake <clean|compile|install>"
+		return 0
 
 main()

@@ -1,6 +1,7 @@
 def available():
 	return [
-		"g++",
-		"erlc"
-	#	"js"
+		"gplusplus",
+		"erlc",
+		"jscc",
+		"jsdoc"
 	]

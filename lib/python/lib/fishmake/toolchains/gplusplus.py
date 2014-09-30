@@ -2,6 +2,8 @@ from   pybase.config import GlobalConfig as PyConfig
 import pybase.config
 import os.path
 
+import fishmake
+
 def configFile():
 	return ".fishmake.cxx"
 
@@ -24,3 +26,7 @@ def install(path):
 
 def doc(path):
 	pass
+
+class ToolChain(fishmake.ToolChain):
+	def __init__(self):
+		pass
