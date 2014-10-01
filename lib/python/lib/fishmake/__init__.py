@@ -10,6 +10,33 @@ from pybase.config import GlobalConfig as PyConfig
 
 import pybase.git as PyGit
 
+class AppConfig(object):
+	def __init__(self, app, app_dir, app_config):
+		self.config    = app_config.clone()
+		self.name      = app
+		self.app_dir   = app_dir
+
+	def version(self):
+		return self.name + "-" + self.config["VERSION"]
+
+	def clone(self):
+		return AppConfig(self.name, self.app_dir, self.config)
+
+	def appDir(self):
+		return os.path.join(self.config["SRC_DIR"], self.app_dir)
+
+	def buildDir(self):
+		return os.path.join(self.appDir(), self.config["BUILD_DIR"])
+
+	def docDir(self):
+		return os.path.join(self.appDir(), "doc/")
+
+	def installDir(self, path):
+		return os.path.join(self.config["INSTALL_PREFIX"], path, self.version())
+
+	def srcDir(self):
+		return os.path.join(self.appDir(), self.config["APP_SRC_DIR"])
+
 class ToolChain(object):
 	def __init__():
 		pass
@@ -20,24 +47,21 @@ class ToolChain(object):
 	def do_configure(self, file, extensions, config, defaults={}):
 		tool_config = config.clone()
 		tool_config.merge(defaults)
-		tool_config.merge(pybase.config.parse(file, {"EXECUTABLE" : False, "INSTALL_DOC" : True}))
+		tool_config.merge(pybase.config.parse(file))
 
 		apps = []
-		for app, app_dir, app_config in tool_config["APP_CONFIG"]:
-			src_dir = os.path.join(os.path.join(tool_config["SRC_DIR"], app_dir), app_config["APP_SRC_DIR"])
-			if PyDir.findFilesByExts(extensions, src_dir):
-				print PyDir.findFilesByExts(extensions, src_dir), extensions, src_dir
+		for app_config in tool_config["APP_CONFIG"]:
+			if PyDir.findFilesByExts(extensions, app_config.srcDir()):
+				print PyDir.findFilesByExts(extensions, app_config.srcDir()), extensions, app_config.srcDir()
 				## Update the tool chain config based on this applications specific config.
 				tapp_config = tool_config.clone()
-				tapp_config.merge(pybase.config.parseFile(os.path.join(app_dir, file)))
+				tapp_config.merge(pybase.config.parseFile(os.path.join(app_config.appDir(), file)))
 
 				## Merge the tool config into the application config
 				napp_config = app_config.clone()
-				napp_config.merge(tapp_config.config)
+				napp_config.config.merge(tapp_config.config)
 
-				napp_config["BUILD_DIR"] = os.path.join(os.path.join(tool_config["SRC_DIR"], app_dir), napp_config["BUILD_DIR"])
-
-				apps.append((app, app_dir, napp_config))
+				apps.append(napp_config)
 
 		tool_config["APP_CONFIG"] = apps
 		self.config = tool_config
@@ -69,9 +93,10 @@ Defaults = [
 	("APP_MAIN",         False),
 	("APP_NAME",         False),
 	("APP_COOKIE",       "snickerdoodle"),
-	("APP_VERSION",      PyGit.getVersion()),
 	("APP_SRC_DIR",      "src"),
 	
+	("VERSION",          PyGit.getVersion()),
+
 	## CXX
 	("CXX_COMPILER",     "g++"),
 	("CXX_FLAGS",        ""),
@@ -87,16 +112,17 @@ Defaults = [
 	("BUILD_DIR",        "build"),
 
 	("INCLUDE_DIRS",     ""),
-	("INSTALL_DIR",      "install"),
+	("INSTALL_PREFIX",   "install"),
 
 	("LIB_DIRS",         ""),
-	("SRC_DIR",          "src")
+	("SRC_DIR",          "src"),
+	("DOC_DIR",          "doc")
 ]
 
 def mkNixDirs():
 	print "==> Making directories..."
 	for nix_dir in fishmake.NIXDirs:
-		tnix_dir = PyDir.makeDirAbsolute(os.path.join(PyConfig["INSTALL_DIR"], nix_dir))
+		tnix_dir = PyDir.makeDirAbsolute(os.path.join(PyConfig["INSTALL_PREFIX"], nix_dir))
 		if not os.path.exists(tnix_dir):
 			os.makedirs(tnix_dir)
 	print "==> Directories made..."
@@ -139,7 +165,7 @@ def configure():
 	for app_dir in PyConfig["APP_DIRS"]:
 		tapp_config = PyConfig.clone()
 		tapp_config.merge(pybase.config.parseFile(os.path.join(app_dir, ".fishmake")))
-		app_config.append((os.path.basename(app_dir), app_dir, tapp_config))
+		app_config.append(AppConfig(os.path.basename(app_dir), app_dir, tapp_config))
 
 	PyConfig["APP_CONFIG"] = app_config
 

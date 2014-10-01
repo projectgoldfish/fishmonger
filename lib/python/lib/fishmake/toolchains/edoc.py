@@ -23,14 +23,8 @@ class ToolChain(fishmake.ToolChain):
 		return 0
 
 	def doc(self):
-		doc_dir = os.path.join(self.config["INSTALL_DIR"], "doc/erlang")
-		if not os.path.isdir(doc_dir):
-			os.makedirs(doc_dir)
-
-		print "==> Installing erlang documentation...", 
-		for app, app_dir, app_config in self.config["APP_CONFIG"]:
-			print "===>", app
-			target_dir = os.path.join(doc_dir, app + "-" + self.config["APP_VERSION"])
-			PyUtil.shell("erl -noshell -run edoc_run application '" + app + "' '\"" + app_dir + "\"' '[{dir, \"" + target_dir + "\"}]'")
+		print "==> Installing documentation..."
+		for app in self.config["APP_CONFIG"]:
+			doc_dir = app.installDir(os.path.join(app.config["DOC_DIR"], "erlang"))
+			PyUtil.shell("erl -noshell -run edoc_run application '" + app.name + "' '\"" + app.appDir() + "\"' '[{dir, \"" + doc_dir + "\"}]'")
 		print "==> Documentation installed!"
-

@@ -49,7 +49,7 @@ class ToolChain(fishmake.ToolChain):
 
 			version_tuple = PyErl.PyErlTuple()
 			version_tuple.appendChild(PyErl.PyErlAtom("vsn"))
-			version_tuple.appendChild(PyErl.PyErlString(self.config["APP_VERSION"]))
+			version_tuple.appendChild(PyErl.PyErlString(self.config["VERSION"]))
 			arg_list.appendChild(version_tuple)
 		
 		def addId(self):
@@ -83,7 +83,7 @@ class ToolChain(fishmake.ToolChain):
 	def getApps(self, app):
 		apps = []
 		
-		app_file = PyDir.find(app + ".app", self.config["INSTALL_DIR"])
+		app_file = PyDir.find(app + ".app", self.config["INSTALL_PREFIX"])
 		if not app_file:
 			app_file = PyDir.find(app + ".app", "/usr/lib/erlang") ## Search in a nix install
 			if not app_file:
@@ -117,7 +117,7 @@ class ToolChain(fishmake.ToolChain):
 	def genShellScript(self):
 		app_name    = self.config["APP_NAME"]
 		app_main    = self.config["APP_MAIN"]
-		install_dir = self.config["INSTALL_DIR"]
+		install_dir = self.config["INSTALL_PREFIX"]
 
 		start_apps  = ""
 		apps        = self.getApps(app_main)
@@ -138,7 +138,7 @@ class ToolChain(fishmake.ToolChain):
 
 	def genShellConnectScript(self):
 		app_name    = self.config["APP_NAME"]
-		install_dir = self.config["INSTALL_DIR"]
+		install_dir = self.config["INSTALL_PREFIX"]
 
 		cookie_file = os.path.join(install_dir, "var/run/.cookie")
 		file_name   = os.path.join(install_dir, "bin/" + app_name + "-connect")
@@ -153,7 +153,7 @@ class ToolChain(fishmake.ToolChain):
 
 	def genShellEnvScript(self):
 		app_name    = self.config["APP_NAME"]
-		install_dir = self.config["INSTALL_DIR"]
+		install_dir = self.config["INSTALL_PREFIX"]
 
 		cookie_file = os.path.join(install_dir, "var/run/.cookie")
 		file_name   = os.path.join(install_dir, "bin/" + app_name + "-env")
@@ -170,7 +170,7 @@ class ToolChain(fishmake.ToolChain):
 	## gen_cookie(dict()) -> None
 	## Generates the cookie file
 	def genCookie(self):
-		file_name = PyDir.makeDirAbsolute(os.path.join(self.config["INSTALL_DIR"], "var/run/.cookie"))
+		file_name = PyDir.makeDirAbsolute(os.path.join(self.config["INSTALL_PREFIX"], "var/run/.cookie"))
 		try:
 			os.remove(file_name)
 		except OSError, e:
@@ -186,7 +186,7 @@ class ToolChain(fishmake.ToolChain):
 	def genConfigFile(self):
 		doc         = PyErl.PyErlDocument()
 		expressions = PyErl.PyErlList()
-		config_file = os.path.join(self.config["INSTALL_DIR"], "etc/" + self.config["APP_MAIN"] + ".config.default")
+		config_file = os.path.join(self.config["INSTALL_PREFIX"], "etc/" + self.config["APP_MAIN"] + ".config.default")
 		for app_dir in self.config["APP_DIRS"]:
 			app        = os.path.basename(app_dir)
 			app_config = os.path.join(app_dir, "etc/" + app + ".config")
@@ -198,7 +198,7 @@ class ToolChain(fishmake.ToolChain):
 		PyErl.write_file(config_file, doc)
 
 	def mkDirs(self):
-		install_dir = os.path.join(self.config["INSTALL_DIR"], "lib/erlang/lib")
+		install_dir = os.path.join(self.config["INSTALL_PREFIX"], "lib/erlang/lib")
 		if not os.path.exists(install_dir):
 			os.makedirs(install_dir)
 
@@ -211,32 +211,28 @@ class ToolChain(fishmake.ToolChain):
 
 	def installApps(self):
 		main_steps = [self.genShellScript, self.genShellEnvScript, self.genShellConnectScript]
-		for app, app_dir, app_config in self.config["APP_CONFIG"]:
-			app_dir = os.path.join(self.config["SRC_DIR"], app_dir)
-			print "==> Installing app", app
-			
-			if app == self.config["APP_MAIN"] or app_config["EXECUTABLE"] == True:
+		for app in self.config["APP_CONFIG"]:
+			print "==> Installing app", app.name
+			if app.name == self.config["APP_MAIN"] or app.config["EXECUTABLE"] == True:
 				for step in main_steps:
 					step()
 
 			## copy binaries
-			install_erl_dir = os.path.join(self.config["INSTALL_DIR"], "lib/erlang/lib/" + app + "-" + self.config["APP_VERSION"])
+			install_erl_dir = app.installDir("lib/erlang/lib")
 			if os.path.exists(install_erl_dir):
 				PyUtil.shell("rm -rf " + install_erl_dir)
 			for dir in ["priv", "ebin"]:
 				install_target = os.path.join(install_erl_dir, dir)
 				os.makedirs(install_target)
-				if os.path.isdir(os.path.join(app_dir, dir)):
-					PyDir.copytree(os.path.join(app_dir, dir), install_target)
+				if os.path.isdir(os.path.join(app.appDir(), dir)):
+					PyDir.copytree(os.path.join(app.appDir(), dir), install_target)
 
 			self.installMisc(app)
-			print "==>", os.path.basename(app), "installed!"
+			print "==>", app.name, "installed!"
 
-	def installMisc(self, path):
-		basename = os.path.basename(path)
-		var_dir  = PyDir.makeDirAbsolute(os.path.join(path, "var"))
-		doc_dir  = PyDir.makeDirAbsolute(os.path.join(path, "doc"))
-		
+	def installMisc(self, app):
+		var_dir         = os.path.join(app.appDir(), "var")
+		install_var_dir = os.path.join(app.config["INSTALL_PREFIX"], "var")
 		print "====> Copying variable content..."
 		if os.path.exists(var_dir):
 			PyDir.copytree(var_dir, install_var_dir)
@@ -244,10 +240,8 @@ class ToolChain(fishmake.ToolChain):
 
 	def installShellScripts(self):
 		main_steps = [self.genShellScript, self.genShellEnvScript, self.genShellConnectScript]
-		for app, app_dir, app_config in self.config["APP_CONFIG"]:
-			app_dir = os.path.join(self.config["SRC_DIR"], app_dir)
-				
-			if app == self.config["APP_MAIN"] or app_config["EXECUTABLE"] == True:
+		for app in self.config["APP_CONFIG"]:			
+			if app == self.config["APP_MAIN"] or app.config["EXECUTABLE"] == True:
 				print "====> Installing shell scripts"
 				for step in main_steps:
 					step()
@@ -264,7 +258,8 @@ class ToolChain(fishmake.ToolChain):
 	## Return True if we are used, false if not
 	def configure(self, config):
 		defaults = {
-			"BUILD_DIR" : "ebin"
+			"BUILD_DIR"  : "ebin",
+			"EXECUTABLE" : "false"
 		}
 		return self.do_configure(".fishmake.erlc", ["erl"], config, defaults)
 
@@ -277,17 +272,15 @@ class ToolChain(fishmake.ToolChain):
 			includes += "-I " + include + " "
 
 		res = 0
-		for app, app_dir, app_config in self.config["APP_CONFIG"]:
-			print "==> Beginning", app
-			app_dir    = os.path.join("src", app_dir)
-			output_dir = os.path.join(app_dir, "ebin")
-			if not os.path.isdir(output_dir):
-				os.mkdir(output_dir)
+		for app in self.config["APP_CONFIG"]:
+			print "==> Beginning", app.name
+			if not os.path.isdir(app.buildDir()):
+				os.mkdir(app.buildDir())
 			print "==> Generating application config"
-			self.genApp(app_dir)
+			self.genApp(app.appDir())
 			print "==> Application config generated."
 			print "==> Compiling *.erl to *.beam"
-			cmd = "erlc " + includes + "-o " + app_config["BUILD_DIR"] + " " + os.path.join(app_dir, "src/*.erl")
+			cmd = "erlc " + includes + "-o " + app.buildDir() + " " + os.path.join(app.srcDir(), "*.erl")
 			res = PyUtil.shell(cmd)
 			if res != 0:
 				print "==> Error compiling"
@@ -296,7 +289,7 @@ class ToolChain(fishmake.ToolChain):
 		return res
 
 	def install(self):
-		install_dir = os.path.join(self.config["INSTALL_DIR"], "lib/erlang/lib")
+		install_dir = os.path.join(self.config["INSTALL_PREFIX"], "lib/erlang/lib")
 		if not os.path.exists(install_dir):
 			os.makedirs(install_dir)
 		self.installSystem()
@@ -306,10 +299,5 @@ class ToolChain(fishmake.ToolChain):
 		return 0
 
 	def doc(self):
-		doc_dir = os.path.join(self.config["INSTALL_DIR"], "doc/erlang")
-		print "==> Installing documentation..."
-		for app, app_dir, app_config in self.config["APP_CONFIG"]:
-			target_dir = os.path.join(doc_dir, app + "-" + self.config["APP_VERSION"])
-			PyUtil.shell("erl -noshell -run edoc_run application '" + app + "' '\"" + app_dir + "\"' '[{dir, \"" + target_dir + "\"}]'")
-		print "==> Documentation installed!"
+		pass
 
