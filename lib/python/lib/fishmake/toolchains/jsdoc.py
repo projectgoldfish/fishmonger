@@ -8,29 +8,20 @@ import shutil
 import fishmake
 
 class ToolChain(fishmake.ToolChain):
-	def __init__(self):
-		pass
-	
 	## Generate language specific configuration
 	## Return True if we are used, false if not
-	def configure(self, config):
+	def configure(self, app_config):
 		defaults = {
 			"BUILD_DIR" : "js"
 		}
-		return self.do_configure(".fishmake.jsdoc", ["js"], config, defaults)
-
-	def compile(self):
-		return 0
-
-	def install(self):
-		return 0
+		return self.doConfigure(file=".fishmake.jsdoc", extensions=["js"], app_config=app_config, defaults=defaults)
 
 	def doc(self):
 		print "==> Installing js documentation..."
-		for app in self.config["APP_CONFIG"]:
+		for app in self.apps:
 			print "===>", app.name
 			
-			target_dir = app.installDir(os.path.join(app.config["DOC_DIR"], "js"))
+			target_dir = app.installVersionDir(os.path.join(app.config["DOC_DIR"], "js"))
 			target_files = ""
 			for js_file in PyDir.findFilesByExts(["js"], app.buildDir()):
 				target_file = os.path.join(app.buildDir(), js_file)

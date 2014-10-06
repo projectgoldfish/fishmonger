@@ -1,19 +1,26 @@
 #! /usr/bin/python
 import fishmake
-from   pybase.config import GlobalConfig as PyConfig
-
-PyConfig.init(".fishmake", fishmake.Defaults)
+import pybase.config
 
 def main():
-	fishmake.configure()
-	if   PyConfig[0] == "clean":
-		return fishmake.clean()
-	elif PyConfig[0] == "compile":
-		return fishmake.compile()
-	elif PyConfig[0] == "install":
-		return fishmake.install()
-	elif PyConfig[0] == "doc":
-		return fishmake.doc()
+	cli = pybase.config.CLIConfig()
+
+	defaults = [
+		("SRC_DIR",        "src"),
+		("INSTALL_PREFIX", "install"),
+		("DOC_DIR",        "doc")
+	]
+
+	fish = fishmake.FishMake(**{"defaults" : defaults})
+	fish.configure()
+	if   cli[0] == "clean":
+		return fish.clean()
+	elif cli[0] == "compile":
+		return fish.compile()
+	elif cli[0] == "install":
+		return fish.install()
+	elif cli[0] == "doc":
+		return fish.doc()
 	else:
 		print "Usage: fishmake <clean|compile|install>"
 		return 0

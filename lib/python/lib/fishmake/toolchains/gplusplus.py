@@ -1,32 +1,15 @@
-from   pybase.config import GlobalConfig as PyConfig
-import pybase.config
-import os.path
-
 import fishmake
 
-def configFile():
-	return ".fishmake.cxx"
-
-def getFileTypes():
-	return ["c", "cpp"]
-
-def compile(path):
-	print "====> cxx"
-	includes = " "
-	for include in PyConfig["INCLUDE_DIRS"]:
-		if include == "":
-			continue
-		includes += "-I " + include + " "
-
-	return 0
-
-def install(path):
-	
-	pass
-
-def doc(path):
-	pass
-
 class ToolChain(fishmake.ToolChain):
-	def __init__(self):
+	def configure(self, app_config):
+		self.config = app_config
+		return False
+
+	def compile(self):
+		print "====> cxx"
+		includes = " "
+		for include in self.config.getDirs("INCLUDE_DIRS"):
+			if include == "":
+				continue
+			includes += "-I " + include + " "
 		pass
