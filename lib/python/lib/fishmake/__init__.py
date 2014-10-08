@@ -87,6 +87,16 @@ class FishMake(ToolChain):
 		## Get base config
 		self.config.merge(PyConfig.FileConfig(".fishmake"))
 
+		## Make certain dependencies are up to date
+		dependencies = []
+		for (target, url) in self.config.get("DEPENDENCIES", []):
+			target_dir = os.path.join(self.config["DEP_DIR"], target)
+			if not os.path.isdir(target_dir):
+				PyGit.clone(url, target_dir)
+			t_appconfig = AppConfig(target_dir)
+			t_appconfig.merge(self.config)
+			dependencies.append(t_appconfig)
+
 		## Process the base config
 		self.config["INCLUDE_DIRS"] = self.config.getDirs("INCLUDE_DIRS") + PyDir.findDirsByName("include")
 		self.config["LIB_DIRS"]     = self.config.getDirs("LIB_DIRS")     + PyDir.findDirsByName("lib")
@@ -106,6 +116,12 @@ class FishMake(ToolChain):
 			## We've made base app config
 			app_config.append(tconfig)
 
+		self.dependents = []
+		for tool_chain in fishmake.Dependents:
+			tc = tool_chain.ToolChain(config=self.config)
+			if tc.configure(dependencies):
+				self.dependents.append(tc)
+
 		## Configure tool_chains.
 		## Determine which we use/dont.
 		self.tool_chains = []
@@ -117,13 +133,13 @@ class FishMake(ToolChain):
 	def compile(self):
 		print "Compiling"
 		## For every available language
-		for tool_chain in self.tool_chains:
+		for tool_chain in self.dependents + self.tool_chains:
 			tool_chain.compile()
 		return 0
 
 	def doc(self):
 		print "Generating documentation"
-		for tool_chain in self.tool_chains:
+		for tool_chain in self.dependents + self.tool_chains:
 			tool_chain.doc()
 
 	def install(self):
@@ -134,13 +150,18 @@ class FishMake(ToolChain):
 			if not os.path.exists(tnix_dir):
 				os.makedirs(tnix_dir)
 		print "==> Directories made..."
-		for tool_chain in self.tool_chains:
+		for tool_chain in self.dependents + self.tool_chains:
 			tool_chain.install()
 
 ToolChains = []
 for c in fishmake.toolchains.available():
 	toolchain = __import__("fishmake.toolchains." + c)
 	exec("ToolChains.append(fishmake.toolchains." + c + ")")
+
+Dependents = []
+for c in fishmake.toolchains.dependable():
+	dependent = __import__("fishmake.toolchains." + c)
+	exec("Dependents.append(fishmake.toolchains." + c + ")")
 
 ## Directories that a built app should contain.
 NIXDirs  = ["bin", "doc", "etc", "lib", "sbin", "var", "var/log", "var/run"]

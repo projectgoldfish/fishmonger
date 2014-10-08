@@ -6,3 +6,9 @@ def available():
 		"jscc",
 		"jsdoc"
 	]
+
+def dependable():
+	return [
+		"fishmaker",
+		"rebar"
+	]
