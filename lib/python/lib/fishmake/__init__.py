@@ -83,7 +83,7 @@ class FishMake(ToolChain):
 	## We have to detect the applicaiton folders and generate base app
 	## configurations here. Caling doConfigure will fill in the blanks.
 	## Once we do that we can setup the tool chains
-	def configure(self):
+	def configure(self, app_config={}):
 		## Get base config
 		self.config.merge(PyConfig.FileConfig(".fishmake"))
 
@@ -119,6 +119,8 @@ class FishMake(ToolChain):
 		self.dependents = []
 		for tool_chain in fishmake.Dependents:
 			tc = tool_chain.ToolChain(config=self.config)
+			print "Dependent", tc.__class__.__name__
+			print "Configure", tc.configure
 			if tc.configure(dependencies):
 				self.dependents.append(tc)
 
@@ -153,15 +155,23 @@ class FishMake(ToolChain):
 		for tool_chain in self.dependents + self.tool_chains:
 			tool_chain.install()
 
-ToolChains = []
-for c in fishmake.toolchains.available():
-	toolchain = __import__("fishmake.toolchains." + c)
-	exec("ToolChains.append(fishmake.toolchains." + c + ")")
+def addToolChains(array, target="ToolChains", prefix=""):
 
+#	dependent = __import__("fishmake.toolchains." + c)
+#	exec("Dependents.append(fishmake.toolchains." + c + ")")
+
+	if prefix != "":
+		prefix += "."
+	for c in array:
+		module    = prefix + c
+		exec("import " + module)
+		exec(target + ".append(" + module + ")")
+
+ToolChains = []
 Dependents = []
-for c in fishmake.toolchains.dependable():
-	dependent = __import__("fishmake.toolchains." + c)
-	exec("Dependents.append(fishmake.toolchains." + c + ")")
+
+addToolChains(fishmake.toolchains.available(),  "ToolChains", "fishmake.toolchains");
+addToolChains(fishmake.toolchains.dependable(), "Dependents", "fishmake.toolchains");
 
 ## Directories that a built app should contain.
 NIXDirs  = ["bin", "doc", "etc", "lib", "sbin", "var", "var/log", "var/run"]

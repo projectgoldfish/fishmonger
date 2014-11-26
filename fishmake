@@ -6,10 +6,19 @@ def main():
 	cli = pybase.config.CLIConfig()
 
 	defaults = [
+		("BUILD_DIR",      "build"),
 		("SRC_DIR",        "src"),
 		("INSTALL_PREFIX", "install"),
 		("DOC_DIR",        "doc")
 	]
+
+	x = 1;
+	extraToolChains = []
+	while x in cli:
+		extraToolChains.append(cli[x])
+		x += 1
+
+	fishmake.addToolChains(extraToolChains)
 
 	fish = fishmake.FishMake(**{"defaults" : defaults})
 	fish.configure()
@@ -22,7 +31,7 @@ def main():
 	elif cli[0] == "doc":
 		return fish.doc()
 	else:
-		print "Usage: fishmake <clean|compile|install>"
+		print "Usage: fishmake <clean|compile|install> [ToolChain|...]"
 		return 0
 
 main()
