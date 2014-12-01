@@ -29,3 +29,5 @@ class ToolChain(fishmake.ToolChain):
 			PyUtil.shell("jsdoc -d " + target_dir + " " + target_files)
 		print "==> Documentation installed!"
 
+	def name(self):
+		return "jsdoc"

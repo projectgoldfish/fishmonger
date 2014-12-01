@@ -2,8 +2,13 @@ import fishmake
 
 class ToolChain(fishmake.ToolChain):
 	def configure(self, app_config):
-		self.config = app_config
-		return False
+		print "Configure CXX"
+		defaults = {
+			"BUILD_DIR"  : "lib",
+			"EXECUTABLE" : "false"
+		}
+		return self.doConfigure(file=".fishmake.erlc", extensions=["c", "cpp"], defaults=defaults, app_config=app_config)
+
 
 	def compile(self):
 		print "====> cxx"
@@ -12,4 +17,8 @@ class ToolChain(fishmake.ToolChain):
 			if include == "":
 				continue
 			includes += "-I " + include + " "
-		pass
+
+		print self.config.config
+
+	def name(self):
+		return "g++"

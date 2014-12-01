@@ -13,7 +13,6 @@ class ToolChain(fishmake.ToolChain):
 		return self.doConfigure(file=".fishmake.jscc", extensions=["js"], app_config=app_config, defaults=defaults)
 
 	def compile(self):
-		#JSCC_INCLUDE_DIRS=.:${JSCC_INCLUDE_DIRS}:jsrc/include jscc ${FISHOS_SRC}/fishos.js > ${FISHOS_OUT}/fishos.js
 		includes = ".:${JSCC_INCLUDE_DIRS}"
 		for include in self.config["INCLUDE_DIRS"]:
 			if include == "":
@@ -37,6 +36,8 @@ class ToolChain(fishmake.ToolChain):
 				os.makedirs(app_install_dir)
 			PyDir.copytree(app.buildDir(), app_install_dir)
 
+	def name(self):
+		return "jscc"
 
 
 

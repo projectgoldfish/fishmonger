@@ -46,3 +46,5 @@ class ToolChain(fishmake.ToolChain):
 					os.makedirs(install_target)
 					PyDir.copytree(os.path.join(app.appDir(), dir), install_target)
 		
+	def name(self):
+		return "rebar"

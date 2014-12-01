@@ -4,8 +4,10 @@ import os
 import os.path
 
 import pybase.config as PyConfig
+import pybase.util   as PyUtil
 import pybase.dir    as PyDir
 import pybase.git    as PyGit
+import pybase.set    as PySet
 
 class AppConfig(PyConfig.Config):
 	def __init__(self, dir):
@@ -24,9 +26,6 @@ class AppConfig(PyConfig.Config):
 	def buildDir(self):
 		return os.path.join(self.dir, self.config.get("BUILD_DIR", "build"))
 
-	def name(self):
-		return self.name
-
 	def srcDir(self):
 		return os.path.join(self.dir, self.config.get("SRC_DIR", "src"))
 
@@ -38,6 +37,12 @@ class AppConfig(PyConfig.Config):
 
 	def installVersionDir(self, dir=""):
 		return self.installAppDir(dir) + "-" + PyGit.getVersion()
+
+	def prerequisiteApps(self):
+		return self.config.get("BUILD_AFTER_APPS", [])
+
+	def prerequisiteTools(self):
+		return self.config.get("BUILD_AFTER_TOOLS", [])
 
 class ToolChain(object):
 	def __init__(self, config={}, defaults={}):
@@ -56,16 +61,27 @@ class ToolChain(object):
 		self.config.merge(defaults)
 		self.config.merge(PyConfig.FileConfig(file))
 
-		apps = []
+		apps = {}
 		for config in app_config:
 			if PyDir.findFilesByExts(extensions, config.srcDir()):
 				## Update the tool chain config based on this applications specific toolchain config.
 				t_config = AppConfig(config.appDir())
 				t_config.merge(self.config)
 				t_config.merge(PyConfig.FileConfig(os.path.join(config.appDir(), file)))
-				apps.append(t_config)
+				apps[t_config.name] = t_config
 
-		self.apps = apps
+		## We need to sort the apps based on what they require
+		## Make a dict of app:requirements to make this easier
+		requirements = {}
+		for app in apps:
+			requirements[app] = apps[app].prerequisiteApps()
+
+		self.apps   = []
+		build_order = PyUtil.determinePriority(requirements)
+		build_order = PyUtil.prioritizeList(apps.keys(), build_order)
+		for app in build_order:
+			self.apps.append(apps[app])
+
 		## If apps is [] we do not need this tool chain
 		return apps != []
 
@@ -78,12 +94,20 @@ class ToolChain(object):
 	def install(self):
 		print self.__class__, "does not implement install!"
 
+	def name(self):
+		print self.__class__, "is unnamed!"
+
+	def prerequisiteTools(self):
+		
+		for app in self.apps:
+
 ## Fishmake is a special toolchain that calls the other toolchains.
 class FishMake(ToolChain):
 	## We have to detect the applicaiton folders and generate base app
 	## configurations here. Caling doConfigure will fill in the blanks.
 	## Once we do that we can setup the tool chains
 	def configure(self, app_config={}):
+		print "Configuring"
 		## Get base config
 		self.config.merge(PyConfig.FileConfig(".fishmake"))
 
@@ -96,6 +120,12 @@ class FishMake(ToolChain):
 			t_appconfig = AppConfig(target_dir)
 			t_appconfig.merge(self.config)
 			dependencies.append(t_appconfig)
+
+		self.dependents = []
+		for tool_chain in fishmake.Dependents:
+			tc = tool_chain.ToolChain(config=self.config)
+			if tc.configure(dependencies):
+				self.dependents.append(tc)
 
 		## Process the base config
 		self.config["INCLUDE_DIRS"] = self.config.getDirs("INCLUDE_DIRS") + PyDir.findDirsByName("include")
@@ -116,31 +146,33 @@ class FishMake(ToolChain):
 			## We've made base app config
 			app_config.append(tconfig)
 
-		self.dependents = []
-		for tool_chain in fishmake.Dependents:
-			tc = tool_chain.ToolChain(config=self.config)
-			print "Dependent", tc.__class__.__name__
-			print "Configure", tc.configure
-			if tc.configure(dependencies):
-				self.dependents.append(tc)
-
 		## Configure tool_chains.
 		## Determine which we use/dont.
-		self.tool_chains = []
+		tool_chains = {}
 		for tool_chain in fishmake.ToolChains:
 			tc = tool_chain.ToolChain(config=self.config)
 			if tc.configure(app_config):
-				self.tool_chains.append(tc)
+				tool_chains[tc.name()] = tc
+
+		## Of the tool chains we use,
+		## Get the prioritized tool_chain lists
+		tool_chain_priority = {} 
+		for tool_chain in tool_chains:
+			tool_chain_priority[tool_chain] = tool_chains[tool_chain].prerequisiteTools()
+
+		self.tool_chains = []
+		tool_chain_order = PyUtil.determinePriority(tool_chain_priority)
+		tool_chain_order = PyUtil.prioritizeList(tool_chains.keys(), tool_chain_priority)
+		for tool_chain in tool_chain_order:
+			self.tool_chains.append(tool_chains[tool_chain])
 
 	def compile(self):
 		print "Compiling"
-		## For every available language
 		for tool_chain in self.dependents + self.tool_chains:
 			tool_chain.compile()
-		return 0
 
 	def doc(self):
-		print "Generating documentation"
+		print "Documenting"
 		for tool_chain in self.dependents + self.tool_chains:
 			tool_chain.doc()
 
@@ -156,10 +188,6 @@ class FishMake(ToolChain):
 			tool_chain.install()
 
 def addToolChains(array, target="ToolChains", prefix=""):
-
-#	dependent = __import__("fishmake.toolchains." + c)
-#	exec("Dependents.append(fishmake.toolchains." + c + ")")
-
 	if prefix != "":
 		prefix += "."
 	for c in array:

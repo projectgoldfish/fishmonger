@@ -285,3 +285,6 @@ class ToolChain(fishmake.ToolChain):
 		self.installApps()
 		self.installDependencies()
 		return 0
+
+	def name(self):
+		return "erlc"

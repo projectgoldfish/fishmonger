@@ -19,3 +19,6 @@ class ToolChain(fishmake.ToolChain):
 			doc_dir = app.installVersionDir(os.path.join(app.config["DOC_DIR"], "erlang"))
 			PyUtil.shell("erl -noshell -run edoc_run application '" + app.name + "' '\"" + app.appDir() + "\"' '[{dir, \"" + doc_dir + "\"}]'")
 		print "==> Documentation installed!"
+
+	def name(self):
+		return "edoc"

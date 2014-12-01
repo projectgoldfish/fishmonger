@@ -31,7 +31,7 @@ def main():
 	elif cli[0] == "doc":
 		return fish.doc()
 	else:
-		print "Usage: fishmake <clean|compile|install> [ToolChain|...]"
+		print "Usage: fishmake <clean|compile|install> [ToolChain[s]]"
 		return 0
 
 main()
