@@ -22,7 +22,6 @@ class ToolChain(fishmake.ToolChain):
 		return apps != []
 
 	def compile(self):
-		print "=> rebar"
 		for app in self.apps:
 			PyUtil.shell("cd " + app.appDir() + " && rebar compile")
 

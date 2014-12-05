@@ -6,7 +6,7 @@ import os.path
 import pybase.config as PyConfig
 import pybase.util   as PyUtil
 import pybase.dir    as PyDir
-import pybase.git    as PyGit
+import pybase.rcs    as PyRCS
 import pybase.set    as PySet
 
 class AppConfig(PyConfig.Config):
@@ -36,7 +36,7 @@ class AppConfig(PyConfig.Config):
 		return os.path.join(self.installDir(dir), self.name)
 
 	def installVersionDir(self, dir=""):
-		return self.installAppDir(dir) + "-" + PyGit.getVersion()
+		return self.installAppDir(dir) + "-" + PyRCS.getVersion()
 
 	def prerequisiteApps(self):
 		return self.config.get("BUILD_AFTER_APPS", [])
@@ -79,6 +79,7 @@ class ToolChain(object):
 		self.apps   = []
 		build_order = PyUtil.determinePriority(requirements)
 		build_order = PyUtil.prioritizeList(apps.keys(), build_order)
+		print "App Order", build_order
 		for app in build_order:
 			self.apps.append(apps[app])
 
@@ -98,8 +99,13 @@ class ToolChain(object):
 		print self.__class__, "is unnamed!"
 
 	def prerequisiteTools(self):
-		
+		## Get the toolchains for the apps, then merge
+		## to get the toolchains for this toolchain
+		tool_chains = []
 		for app in self.apps:
+			tool_chains.append(app.prerequisiteTools())
+		return PyUtil.mergePrioritizedLists(tool_chains)
+
 
 ## Fishmake is a special toolchain that calls the other toolchains.
 class FishMake(ToolChain):
@@ -116,7 +122,7 @@ class FishMake(ToolChain):
 		for (target, url) in self.config.get("DEPENDENCIES", []):
 			target_dir = os.path.join(self.config["DEP_DIR"], target)
 			if not os.path.isdir(target_dir):
-				PyGit.clone(url, target_dir)
+				PyRCS.clone(url, target_dir)
 			t_appconfig = AppConfig(target_dir)
 			t_appconfig.merge(self.config)
 			dependencies.append(t_appconfig)
@@ -148,27 +154,35 @@ class FishMake(ToolChain):
 
 		## Configure tool_chains.
 		## Determine which we use/dont.
-		tool_chains = {}
+		tool_chains         = {}
+		tool_chain_prereqs  = {}
 		for tool_chain in fishmake.ToolChains:
 			tc = tool_chain.ToolChain(config=self.config)
 			if tc.configure(app_config):
-				tool_chains[tc.name()] = tc
+				tool_chains[tc.name()]         = tc
+				tool_chain_prereqs[tc.name()]  = tc.prerequisiteTools()
 
-		## Of the tool chains we use,
-		## Get the prioritized tool_chain lists
-		tool_chain_priority = {} 
-		for tool_chain in tool_chains:
-			tool_chain_priority[tool_chain] = tool_chains[tool_chain].prerequisiteTools()
+		print "Chains", tool_chains
+		print "Chain Priority", tool_chain_prereqs
+
+		## Get priority list
+		tool_chain_order = PyUtil.mergePrioritizedLists(tool_chain_prereqs.values())
+		print "TMO", tool_chain_order
+		## Make certain all elements are in priority list
+		tool_chain_order = PyUtil.prioritizeList(tool_chains.keys(), tool_chain_order)
+
+		print "Chain Order", tool_chain_order
 
 		self.tool_chains = []
-		tool_chain_order = PyUtil.determinePriority(tool_chain_priority)
-		tool_chain_order = PyUtil.prioritizeList(tool_chains.keys(), tool_chain_priority)
 		for tool_chain in tool_chain_order:
 			self.tool_chains.append(tool_chains[tool_chain])
+
+		print 
 
 	def compile(self):
 		print "Compiling"
 		for tool_chain in self.dependents + self.tool_chains:
+			print "==>", tool_chain.name()
 			tool_chain.compile()
 
 	def doc(self):
@@ -190,16 +204,17 @@ class FishMake(ToolChain):
 def addToolChains(array, target="ToolChains", prefix=""):
 	if prefix != "":
 		prefix += "."
+
+	modules = []
 	for c in array:
-		module    = prefix + c
-		exec("import " + module)
-		exec(target + ".append(" + module + ")")
+		modules.append(prefix + c)
+	PyUtil.loadModules(modules, target)
 
 ToolChains = []
 Dependents = []
 
-addToolChains(fishmake.toolchains.available(),  "ToolChains", "fishmake.toolchains");
-addToolChains(fishmake.toolchains.dependable(), "Dependents", "fishmake.toolchains");
+addToolChains(fishmake.toolchains.available(),  ToolChains, "fishmake.toolchains");
+addToolChains(fishmake.toolchains.dependable(), Dependents, "fishmake.toolchains");
 
 ## Directories that a built app should contain.
 NIXDirs  = ["bin", "doc", "etc", "lib", "sbin", "var", "var/log", "var/run"]

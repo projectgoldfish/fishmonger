@@ -11,7 +11,6 @@ class ToolChain(fishmake.ToolChain):
 
 
 	def compile(self):
-		print "====> cxx"
 		includes = " "
 		for include in self.config.getDirs("INCLUDE_DIRS"):
 			if include == "":
