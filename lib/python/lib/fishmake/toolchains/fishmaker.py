@@ -6,3 +6,6 @@ class ToolChain(fishmake.ToolChain):
 
 	def name(self):
 		return "fishmake"
+
+	def buildCommands(self, app):
+		pass

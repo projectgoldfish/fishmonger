@@ -11,7 +11,6 @@ class ToolChain(fishmake.ToolChain):
 	## Generate language specific configuration
 	## Return True if we are used, false if not
 	def configure(self, app_config):
-		print "Configuring rebar"
 		apps = []
 		for config in app_config:
 			if os.path.isfile(os.path.join(config.appDir(), "rebar.config")):
@@ -21,9 +20,8 @@ class ToolChain(fishmake.ToolChain):
 		## If apps is [] we do not need this tool chain
 		return apps != []
 
-	def compile(self):
-		for app in self.apps:
-			PyUtil.shell("cd " + app.appDir() + " && rebar compile")
+	def buildCommands(self, app):
+		return ["cd " + app.appDir() + " && rebar compile"]
 
 	def doc(self):
 		for app in self.apps:

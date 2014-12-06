@@ -54,9 +54,20 @@ class ToolChain(object):
 		self.config.merge(cli_config)
 		self.config.merge(config)
 
+	## Functions that MUST be implemented
 	def configure(self, **kwargs):
 		raise Exception("%s does not implement configure!" % self.__class__)
 
+	def buildCommands(self, app):
+		raise Exception("%s MUST implement buildCommands or override build!" % self.__class__)
+
+	def installApp(self, app):
+		raise Exception("%s MUST implement installApp or override install!" % self.__class__)
+
+	def name(self):
+		raise Exceltion("%s is unnamed!", self.__class__)
+
+	## Functions that MAY be implemented, but have default behavior that should be good enough.
 	def doConfigure(self, file=None, extensions=[], defaults={}, app_config=[]):
 		self.config.merge(defaults)
 		self.config.merge(PyConfig.FileConfig(file))
@@ -79,24 +90,35 @@ class ToolChain(object):
 		self.apps   = []
 		build_order = PyUtil.determinePriority(requirements)
 		build_order = PyUtil.prioritizeList(apps.keys(), build_order)
-		print "App Order", build_order
 		for app in build_order:
 			self.apps.append(apps[app])
 
 		## If apps is [] we do not need this tool chain
-		return apps != []
+		return apps != []	
 
-	def compile(self):
-		print self.__class__, "does not implement compile!"
-		
-	def doc(self):
-		print self.__class__, "does not implement doc!"
+	def build(self):
+		for app in self.apps:
+			print "====>", app.name
+			if not os.path.isdir(app.buildDir()):
+				os.mkdir(app.buildDir())
+			
+			try:
+				cmds = self.buildCommands(app)
+				if not cmds:
+					continue
+				for cmd in cmds:
+					if PyUtil.shell(cmd, prefix="======>", stdout=True, stderr=True) != 0:
+						raise Exception("Failure compiling %s during: %s" % (app.name, cmd))
+
+			except Exception as e:
+				print "======> Error compiling:", e
+				return False
+		return True		
 		
 	def install(self):
-		print self.__class__, "does not implement install!"
-
-	def name(self):
-		print self.__class__, "is unnamed!"
+		for app in self.apps:
+			print "====>", app.name
+			self.installApp(app)
 
 	def prerequisiteTools(self):
 		## Get the toolchains for the apps, then merge
@@ -130,6 +152,7 @@ class FishMake(ToolChain):
 		self.dependents = []
 		for tool_chain in fishmake.Dependents:
 			tc = tool_chain.ToolChain(config=self.config)
+			print "==>", tc.name()
 			if tc.configure(dependencies):
 				self.dependents.append(tc)
 
@@ -158,47 +181,35 @@ class FishMake(ToolChain):
 		tool_chain_prereqs  = {}
 		for tool_chain in fishmake.ToolChains:
 			tc = tool_chain.ToolChain(config=self.config)
+			print "==>", tc.name()
 			if tc.configure(app_config):
 				tool_chains[tc.name()]         = tc
 				tool_chain_prereqs[tc.name()]  = tc.prerequisiteTools()
 
-		print "Chains", tool_chains
-		print "Chain Priority", tool_chain_prereqs
-
 		## Get priority list
 		tool_chain_order = PyUtil.mergePrioritizedLists(tool_chain_prereqs.values())
-		print "TMO", tool_chain_order
+
 		## Make certain all elements are in priority list
 		tool_chain_order = PyUtil.prioritizeList(tool_chains.keys(), tool_chain_order)
-
-		print "Chain Order", tool_chain_order
-
+		
 		self.tool_chains = []
 		for tool_chain in tool_chain_order:
 			self.tool_chains.append(tool_chains[tool_chain])
 
-		print 
-
-	def compile(self):
-		print "Compiling"
+	def build(self):
+		print "Building"
 		for tool_chain in self.dependents + self.tool_chains:
 			print "==>", tool_chain.name()
-			tool_chain.compile()
+			tool_chain.build()
 
-	def doc(self):
-		print "Documenting"
-		for tool_chain in self.dependents + self.tool_chains:
-			tool_chain.doc()
-
-	def install(self):
+	def install(self, app=None):
 		print "Installing"
-		print "==> Making directories..."
 		for nix_dir in fishmake.NIXDirs:
 			tnix_dir = PyDir.makeDirAbsolute(os.path.join(self.config.get("INSTALL_PREFIX", "install"), nix_dir))
 			if not os.path.exists(tnix_dir):
 				os.makedirs(tnix_dir)
-		print "==> Directories made..."
 		for tool_chain in self.dependents + self.tool_chains:
+			print "==>", tool_chain.name()
 			tool_chain.install()
 
 def addToolChains(array, target="ToolChains", prefix=""):

@@ -16,18 +16,21 @@ class ToolChain(fishmake.ToolChain):
 		}
 		return self.doConfigure(file=".fishmake.jsdoc", extensions=["js"], app_config=app_config, defaults=defaults)
 
-	def doc(self):
-		print "==> Installing js documentation..."
-		for app in self.apps:
-			print "===>", app.name
-			
-			target_dir = app.installVersionDir(os.path.join(app.config["DOC_DIR"], "js"))
-			target_files = ""
-			for js_file in PyDir.findFilesByExts(["js"], app.buildDir()):
-				target_file = os.path.join(app.buildDir(), js_file)
-				target_files += target_file + " "
-			PyUtil.shell("jsdoc -d " + target_dir + " " + target_files)
-		print "==> Documentation installed!"
+	def buildCommands(self, app):
+		target_dir = os.path.join(app.appDir(), app.config["DOC_DIR"] + "-jsdoc")
+		target_files = ""
+		for js_file in PyDir.findFilesByExts(["js"], app.buildDir()):
+			target_file = os.path.join(app.buildDir(), js_file)
+			target_files += target_file + " "
+		return ["jsdoc -d " + target_dir + " " + target_files]
+
+	def installApp(self, app):
+		src_dir = os.path.join(app.appDir(), app.config["DOC_DIR"] + "-jsdoc")
+		doc_dir = app.installVersionDir(os.path.join(app.config["DOC_DIR"], "js"))
+
+		os.makedirs(doc_dir)
+
+		PyDir.copytree(src_dir, doc_dir)
 
 	def name(self):
 		return "jsdoc"

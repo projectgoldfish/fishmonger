@@ -209,7 +209,7 @@ class ToolChain(fishmake.ToolChain):
 	def installApps(self):
 		main_steps = [self.genShellScript, self.genShellEnvScript, self.genShellConnectScript, self.genConfigFile, self.genCookie]
 		for app in self.apps:
-			print "======> Installing app", app.name
+			print "====> Installing app", app.name
 			if app.name == self.config["ERL_MAIN"] or app.config["EXECUTABLE"] == True:
 				for step in main_steps:
 					step(app)
@@ -225,19 +225,19 @@ class ToolChain(fishmake.ToolChain):
 					PyDir.copytree(os.path.join(app.appDir(), dir), install_target)
 
 			self.installMisc(app)
-			print "======>", app.name, "installed!"
+			print "====>", app.name, "installed!"
 
 	def installMisc(self, app):
 		var_dir         = os.path.join(app.appDir(), "var")
 		install_var_dir = os.path.join(app.config["INSTALL_PREFIX"], "var")
-		print "========> Copying variable content..."
+		print "======> Copying variable content..."
 		if os.path.exists(var_dir):
 			PyDir.copytree(var_dir, install_var_dir)
-		print "========> Variable content copied!"
+		print "======> Variable content copied!"
 		main_steps = [self.genShellScript, self.genShellEnvScript, self.genShellConnectScript]
 		for app in self.apps:
 			if app == self.config["ERL_MAIN"] or app.config["EXECUTABLE"] == True:
-				print "========> Installing shell scripts"
+				print "======> Installing shell scripts"
 				for step in main_steps:
 					step()
 
@@ -256,29 +256,14 @@ class ToolChain(fishmake.ToolChain):
 		}
 		return self.doConfigure(file=".fishmake.erlc", extensions=["erl"], defaults=defaults, app_config=app_config)
 
-	def compile(self):
+	def buildCommands(self, app):
 		includes = " "
 		for include in self.config["INCLUDE_DIRS"]:
 			if include == "":
 				continue
 			includes += "-I " + include + " "
 
-		res = 0
-		for app in self.apps:
-			print "====>", app.name
-			if not os.path.isdir(app.buildDir()):
-				os.mkdir(app.buildDir())
-			print "======> Generating application config"
-			self.genApp(app)
-			print "======> Application config generated."
-			print "======> Compiling *.erl to *.beam"
-			cmd = "erlc " + includes + "-o " + app.buildDir() + " " + os.path.join(app.srcDir(), "*.erl")
-			res = PyUtil.shell(cmd)
-			if res != 0:
-				print "======> Error compiling"
-				return res
-			print "======> Beams generated"
-		return res
+		return ["erlc " + includes + "-o " + app.buildDir() + " " + os.path.join(app.srcDir(), "*.erl")]
 
 	def install(self):
 		self.installApps()

@@ -24,14 +24,12 @@ def main():
 	fish.configure()
 	if   cli[0] == "clean":
 		return fish.clean()
-	elif cli[0] == "compile":
-		return fish.compile()
+	elif cli[0] == "build" or cli[0] == "compile":
+		return fish.build()
 	elif cli[0] == "install":
 		return fish.install()
-	elif cli[0] == "doc":
-		return fish.doc()
 	else:
-		print "Usage: fishmake <clean|compile|install> [ToolChain[s]]"
+		print "Usage: fishmake <clean|build|compile|install> [ToolChain[s]]"
 		return 0
 
 main()
