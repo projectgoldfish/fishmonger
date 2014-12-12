@@ -23,6 +23,7 @@ class ToolChain(fishmake.ToolChain):
 		for js_file in PyDir.findFilesByExts(["js"], app.srcDir()):
 			target_file = os.path.join(app.buildDir(), js_file)
 			cmds.append("JSCC_INCLUDE_DIRS=" + includes + " jscc " + os.path.join(app.srcDir(), js_file) +  " > " + target_file)
+		return cmds
 
 	def installApp(self, app):
 		for app in self.apps:
