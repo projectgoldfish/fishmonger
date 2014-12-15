@@ -20,23 +20,34 @@ class AppConfig(PyConfig.Config):
 	def parse(self):
 		pass
 
-	def appDir(self):
-		return self.dir
+	def appDir(self, dir=""):
+		if dir == "":
+			return self.dir
+		else:
+			return os.path.join(self.dir, dir)
 
-	def buildDir(self):
-		return os.path.join(self.dir, self.config.get("BUILD_DIR", "build"))
+	def buildDir(self, dir=""):
+		build_dir = os.path.join(self.dir, self.config.get("BUILD_DIR", "build"))
+		return os.path.join(build_dir, dir)
 
-	def srcDir(self):
-		return os.path.join(self.dir, self.config.get("SRC_DIR", "src"))
+	def docDir(self, dir=""):
+		doc_dir = os.path.join(self.dir, self.config.get("DOC_DIR", "doc"))
+		return os.path.join(doc_dir, dir)
+
+	def srcDir(self, dir=""):
+		src_dir = os.path.join(self.dir, self.config.get("SRC_DIR", "src"))
+		return os.path.join(src_dir, dir)
 
 	def installDir(self, dir=""):
 		return os.path.join(self.config.get("INSTALL_PREFIX", "install"), dir)
 
 	def installAppDir(self, dir=""):
-		return os.path.join(self.installDir(dir), self.name)
+		install_app_dir = os.path.join(self.installDir(dir), self.name)
+		return install_app_dir + "-" + PyRCS.getVersion()
 
-	def installVersionDir(self, dir=""):
-		return self.installAppDir(dir) + "-" + PyRCS.getVersion()
+	def installDocDir(self, dir=""):
+		doc_dir = os.path.join(self.installDir("doc"), dir)
+		return os.path.join(doc_dir, self.name + "-" + PyRCS.getVersion())
 
 	def prerequisiteApps(self):
 		return self.config.get("BUILD_AFTER_APPS", [])
@@ -64,6 +75,9 @@ class ToolChain(object):
 	def installApp(self, app):
 		raise Exception("%s MUST implement installApp or override install!" % self.__class__)
 
+	def installDoc(self, app):
+		raise Exception("%s MUST implement installDoc or override doc!" % self.__class__)		
+
 	def name(self):
 		raise Exceltion("%s is unnamed!", self.__class__)
 
@@ -74,12 +88,11 @@ class ToolChain(object):
 
 		apps = {}
 		for config in app_config:
-			if PyDir.findFilesByExts(extensions, config.srcDir()):
+			if PyDir.findFilesByExts(extensions, config.srcDir()) != []:
 				## Update the tool chain config based on this applications specific toolchain config.
-				t_config = AppConfig(config.appDir())
-				t_config.merge(self.config)
-				t_config.merge(PyConfig.FileConfig(os.path.join(config.appDir(), file)))
-				apps[t_config.name] = t_config
+				apps[config.name] = AppConfig(config.appDir())
+				apps[config.name].merge(self.config)
+				apps[config.name].merge(PyConfig.FileConfig(os.path.join(config.appDir(), file)))
 
 		## We need to sort the apps based on what they require
 		## Make a dict of app:requirements to make this easier
@@ -107,8 +120,13 @@ class ToolChain(object):
 				if not cmds:
 					continue
 				for cmd in cmds:
-					if PyUtil.shell(cmd, prefix="======>", stdout=True, stderr=True) != 0:
-						raise Exception("Failure compiling %s during: %s" % (app.name, cmd))
+					if hasattr(cmd, "__call__"):
+						cmd(app)
+					elif isinstance(cmd, basestring):
+						if PyUtil.shell(cmd, prefix="======>", stdout=True, stderr=True) != 0:
+							raise Exception("Failure compiling %s during: %s" % (app.name, cmd))
+					else:
+						raise Exception("Invalid build cmd. Cmds must be string or fun: %s : %s" % (app.name, cmd))
 
 			except Exception as e:
 				print "======> Error compiling:", e
@@ -120,6 +138,11 @@ class ToolChain(object):
 			print "====>", app.name
 			self.installApp(app)
 
+	def doc(self):
+		for app in self.apps:
+			print "====>", app.name
+			self.installDoc(app)
+
 	def prerequisiteTools(self):
 		## Get the toolchains for the apps, then merge
 		## to get the toolchains for this toolchain
@@ -128,8 +151,6 @@ class ToolChain(object):
 			tool_chains.append(app.prerequisiteTools())
 		return PyUtil.mergePrioritizedLists(tool_chains)
 
-
-## Fishmake is a special toolchain that calls the other toolchains.
 class FishMake(ToolChain):
 	## We have to detect the applicaiton folders and generate base app
 	## configurations here. Caling doConfigure will fill in the blanks.
@@ -202,7 +223,7 @@ class FishMake(ToolChain):
 			print "==>", tool_chain.name()
 			tool_chain.build()
 
-	def install(self, app=None):
+	def install(self):
 		print "Installing"
 		for nix_dir in fishmake.NIXDirs:
 			tnix_dir = PyDir.makeDirAbsolute(os.path.join(self.config.get("INSTALL_PREFIX", "install"), nix_dir))
@@ -211,6 +232,13 @@ class FishMake(ToolChain):
 		for tool_chain in self.dependents + self.tool_chains:
 			print "==>", tool_chain.name()
 			tool_chain.install()
+
+	def doc(self):
+		print "Documenting"
+		for tool_chain in self.dependents + self.tool_chains:
+			print "==>", tool_chain.name()
+			tool_chain.doc()
+
 
 def addToolChains(array, target="ToolChains", prefix=""):
 	if prefix != "":

@@ -28,8 +28,10 @@ def main():
 		return fish.build()
 	elif cli[0] == "install":
 		return fish.install()
+	elif cli[0] == "doc":
+		return fish.doc()
 	else:
-		print "Usage: fishmake <clean|build|compile|install> [ToolChain[s]]"
+		print "Usage: fishmake <clean|build|compile|install|doc> [ToolChain[s]]"
 		return 0
 
 main()

@@ -67,9 +67,8 @@ class ToolChain(fishmake.ToolChain):
 	## Looks in each app dir for a $APP.app.fish file
 	## uses it to generate a .app
 	def genApp(self, app):
-		app_src  = os.path.join(app.srcDir(),   app.name + ".app.fish")
-		app_file = os.path.join(app.buildDir(), app.name + ".app")
-		
+		app_src  = app.srcDir(app.name + ".app.fish")
+		app_file = app.buildDir(app.name + ".app")
 		if os.path.isfile(app_src):
 			doc  = ErlApp(app_src, app)
 			doc.write(app_file)
@@ -114,8 +113,7 @@ class ToolChain(fishmake.ToolChain):
 	## or attach to a runnign node.
 	def genShellScript(self, app):
 		app_name    = app.name
-		install_dir = app.installDir("")
-
+		
 		start_apps  = ""
 		apps        = self.getApps(app.name)
 
@@ -168,6 +166,7 @@ class ToolChain(fishmake.ToolChain):
 	## gen_cookie(dict()) -> None
 	## Generates the cookie file
 	def genCookie(self, app):
+		print "======> Baking cookie..."
 		cookie_dir  = app.installAppDir("var/run")
 		if not os.path.isdir(cookie_dir):
 			os.makedirs(cookie_dir)
@@ -193,12 +192,15 @@ class ToolChain(fishmake.ToolChain):
 	def genConfigFile(self, app):
 		doc         = PyErl.PyErlDocument()
 		expressions = PyErl.PyErlList()
-		config_file = os.path.join(app.installDir("etc"), app.name + ".config.default")
+		config_file = app.installDir("etc/" + app.name + ".config.default")
 		apps        = self.getApps(app.name)
+
+		print "======> Generating config..."
+
 		for app in self.apps:
 			if app.name not in apps:
 				continue
-			app_config = os.path.join(app.appDir(), "etc/" + app.name + ".config")
+			app_config = app.appDir("etc/" + app.name + ".config")
 			if os.path.isfile(app_config):
 				terms = PyErl.parse_file(app_config)
 				expressions.appendChild(terms)
@@ -206,44 +208,13 @@ class ToolChain(fishmake.ToolChain):
 		doc.appendChild(expressions)
 		PyErl.write_file(config_file, doc)
 
-	def installApps(self):
-		main_steps = [self.genShellScript, self.genShellEnvScript, self.genShellConnectScript, self.genConfigFile, self.genCookie]
-		for app in self.apps:
-			print "====> Installing app", app.name
-			if app.name == self.config["ERL_MAIN"] or app.config["EXECUTABLE"] == True:
-				for step in main_steps:
-					step(app)
-
-			## copy binaries
-			install_erl_dir = app.installVersionDir("lib/erlang/lib")
-			if os.path.exists(install_erl_dir):
-				PyUtil.shell("rm -rf " + install_erl_dir)
-			for dir in ["priv", "ebin"]:
-				install_target = os.path.join(install_erl_dir, dir)
-				if os.path.isdir(os.path.join(app.appDir(), dir)):
-					os.makedirs(install_target)
-					PyDir.copytree(os.path.join(app.appDir(), dir), install_target)
-
-			self.installMisc(app)
-			print "====>", app.name, "installed!"
-
 	def installMisc(self, app):
-		var_dir         = os.path.join(app.appDir(), "var")
-		install_var_dir = os.path.join(app.config["INSTALL_PREFIX"], "var")
-		print "======> Copying variable content..."
-		if os.path.exists(var_dir):
+		var_dir         = app.appDir("var")
+		install_var_dir = app.installDir("var")
+		print "======> Copying content..."
+		if os.path.isdir(var_dir):
 			PyDir.copytree(var_dir, install_var_dir)
-		print "======> Variable content copied!"
-		main_steps = [self.genShellScript, self.genShellEnvScript, self.genShellConnectScript]
-		for app in self.apps:
-			if app == self.config["ERL_MAIN"] or app.config["EXECUTABLE"] == True:
-				print "======> Installing shell scripts"
-				for step in main_steps:
-					step()
-
-	def installDependencies(self):
-		pass
-
+		
 	## What follows is the fishmake language api
 	## All of the following variables and functions must be made available.
 	
@@ -263,12 +234,29 @@ class ToolChain(fishmake.ToolChain):
 				continue
 			includes += "-I " + include + " "
 
-		return ["erlc " + includes + "-o " + app.buildDir() + " " + os.path.join(app.srcDir(), "*.erl")]
+		return ["erlc " + includes + "-o " + app.buildDir() + " " + os.path.join(app.srcDir(), "*.erl"), self.genApp]
 
-	def install(self):
-		self.installApps()
-		self.installDependencies()
-		return 0
+	def installApp(self, app):
+		## copy binaries
+		install_erl_dir = app.installAppDir("lib/erlang/lib")
+		if os.path.exists(install_erl_dir):
+			shutil.rmtree(install_erl_dir)
+		for dir in ["priv", "ebin"]:
+			install_target = os.path.join(install_erl_dir, dir)
+			if os.path.isdir(app.appDir(dir)):
+				os.makedirs(install_target)
+				PyDir.copytree(app.appDir(dir), install_target)
+
+		self.installMisc(app)
+
+		main_steps = [self.genShellScript, self.genShellEnvScript, self.genShellConnectScript, self.genConfigFile, self.genCookie]
+		if app.name == self.config["ERL_MAIN"] or app.config["EXECUTABLE"] == True:
+			for step in main_steps:
+				step(app)
+	
+
+	def doc(self):
+		pass
 
 	def name(self):
 		return "erlc"

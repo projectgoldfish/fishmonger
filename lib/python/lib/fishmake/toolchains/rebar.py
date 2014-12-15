@@ -26,22 +26,17 @@ class ToolChain(fishmake.ToolChain):
 	def doc(self):
 		for app in self.apps:
 			PyUtil.shell("cd " + app.appDir() + " && rebar doc")
-			doc_dir = app.installVersionDir(os.path.join(app.config["DOC_DIR"], "erlang"))
-			if os.path.exists(doc_dir):
-				PyUtil.shell("rm -rf " + doc_dir)
-			os.makedirs(doc_dir)
-			PyDir.copytree(os.path.join(app.appDir(), "doc"), doc_dir)
+			doc_dir = app.installDocDir("erlang")
+			PyDir.copytree(os.path.join(app.appDir(), "doc"), doc_dir, True)
 
 	def install(self):
 		for app in self.apps:
-			install_erl_dir = app.installVersionDir("lib/erlang/lib")
-			if os.path.exists(install_erl_dir):
-				PyUtil.shell("rm -rf " + install_erl_dir)
+			install_erl_dir = app.installAppDir("lib/erlang/lib")
 			for dir in ["priv", "ebin"]:
+				install_source = os.path.join(app.appDir(), dir)
 				install_target = os.path.join(install_erl_dir, dir)
-				if os.path.isdir(os.path.join(app.appDir(), dir)):
-					os.makedirs(install_target)
-					PyDir.copytree(os.path.join(app.appDir(), dir), install_target)
+				if os.path.isdir(install_source):
+					PyDir.copytree(install_source, install_target, True)
 		
 	def name(self):
 		return "rebar"

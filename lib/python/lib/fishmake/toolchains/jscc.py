@@ -32,6 +32,9 @@ class ToolChain(fishmake.ToolChain):
 				os.makedirs(app_install_dir)
 			PyDir.copytree(app.buildDir(), app_install_dir)
 
+	def doc(self):
+		pass
+
 	def name(self):
 		return "jscc"
 

@@ -13,17 +13,19 @@ class ToolChain(fishmake.ToolChain):
 	def configure(self, app_config):
 		return self.doConfigure(file=".fishmake.edoc", extensions=["erl"], app_config=app_config)
 
-	def buildCommands(self, app):
-		doc_dir = os.path.join(app.appDir(), app.config["DOC_DIR"] + "-edoc")
-		return ["erl -noshell -run edoc_run application '" + app.name + "' '\"" + app.appDir() + "\"' '[{dir, \"" + doc_dir + "\"}]'"]
+	def build(self):
+		pass
 
-	def installApp(self, app):
-		src_dir = os.path.join(app.appDir(), app.config["DOC_DIR"])
-		doc_dir = app.installVersionDir(os.path.join(app.config["DOC_DIR"], "erlang"))
+	def install(self):
+		pass
 
-		os.makedirs(doc_dir)
+	def installDoc(self, app):
+		doc_dir = app.installDocDir("erlang")
+		if os.path.isdir(doc_dir):
+			shutil.rmtree(doc_dir)
+			os.makedirs(doc_dir)
 
-		PyDir.copytree(src_dir, doc_dir)
+		PyUtil.shell("erl -noshell -run edoc_run application '" + app.name + "' '\"" + app.appDir() + "\"' '[{dir, \"" + doc_dir + "\"}]'", prefix="======>", stdout=True, stderr=True)
 
 	def name(self):
 		return "edoc"
