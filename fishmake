@@ -1,9 +1,108 @@
 #! /usr/bin/python
+import os
 import fishmake
-import pybase.config
+import pybase.config as PyConfig
+import pybase.dir    as PyDir
+import pybase.rcs    as PyRCS
+import pybase.util   as PyUtil
+
+class FishMake():
+	def __init__(self, config={}, defaults={}):
+		cli_config  = PyConfig.CLIConfig()
+		sys_config  = PyConfig.SysConfig()
+		self.config = PyConfig.Config()
+		self.config.merge(defaults)
+		self.config.merge(sys_config)
+		self.config.merge(cli_config)
+		self.config.merge(config)
+
+	## We have to detect the applicaiton folders and generate base app
+	## configurations here. Caling doConfigure will fill in the blanks.
+	## Once we do that we can setup the tool chains
+	def configure(self, app_config={}):
+		print "Configuring"
+		## Get base config
+		self.config.merge(PyConfig.FileConfig(".fishmake"))
+
+		app_dirs = self.config.getDirs("APP_DIRS") + PyDir.getDirDirs(self.config["SRC_DIR"])
+		                       
+		## We have the app dirs.
+		app_config = {}
+		for app_dir in app_dirs:
+			## Make an AppConfig for this appdir
+			tconfig = fishmake.AppConfig(app_dir)
+			if tconfig.name in app_config:
+				continue
+			print "==>", app_dir
+
+			tconfig.merge(self.config)
+
+			## Update it with any .fishmake in it's directory.
+			tconfig.merge(PyConfig.FileConfig(os.path.join(app_dir, ".fishmake")))
+			app_config[tconfig.name] = tconfig
+
+			for (target, url) in tconfig.get("DEPENDENCIES", []):
+				target_dir = os.path.join(self.config["DEP_DIR"], target)
+				if not os.path.isdir(target_dir):
+					PyRCS.clone(url, target_dir)
+				else:
+					PyRCS.update(target_dir)
+				app_dirs.append(target_dir)
+
+		app_config = app_config.values()
+
+		## Process the base config
+		self.config["INCLUDE_DIRS"] = self.config.getDirs("INCLUDE_DIRS") + PyDir.findDirsByName("include")
+		self.config["LIB_DIRS"]     = self.config.getDirs("LIB_DIRS")     + PyDir.findDirsByName("lib")
+		for tconfig in app_config:
+			tconfig["INCLUDE_DIRS"] = self.config["INCLUDE_DIRS"]
+			tconfig["LIB_DIRS"]     = self.config["LIB_DIRS"]
+
+		## Configure tool_chains.
+		## Determine which we use/dont.
+		tool_chains         = {}
+		tool_chain_prereqs  = {}
+		for tool_chain in fishmake.ToolChains:
+			tc = tool_chain.ToolChain(config=self.config)
+			print "==>", tc.name()
+			if tc.configure(app_config):
+				tool_chains[tc.name()]         = tc
+				tool_chain_prereqs[tc.name()]  = tc.prerequisiteTools()
+
+		## Get priority list
+		tool_chain_order = PyUtil.mergePrioritizedLists(tool_chain_prereqs.values())
+
+		## Make certain all elements are in priority list
+		tool_chain_order = PyUtil.prioritizeList(tool_chains.keys(), tool_chain_order)
+		
+		self.tool_chains = []
+		for tool_chain in tool_chain_order:
+			self.tool_chains.append(tool_chains[tool_chain])
+
+	def build(self):
+		print "Building"
+		for tool_chain in self.tool_chains:
+			print "==>", tool_chain.name()
+			tool_chain.build()
+
+	def install(self):
+		print "Installing"
+		for nix_dir in fishmake.NIXDirs:
+			tnix_dir = PyDir.makeDirAbsolute(os.path.join(self.config.get("INSTALL_PREFIX", "install"), nix_dir))
+			if not os.path.exists(tnix_dir):
+				os.makedirs(tnix_dir)
+		for tool_chain in self.tool_chains:
+			print "==>", tool_chain.name()
+			tool_chain.install()
+
+	def doc(self):
+		print "Documenting"
+		for tool_chain in self.tool_chains:
+			print "==>", tool_chain.name()
+			tool_chain.doc()
 
 def main():
-	cli = pybase.config.CLIConfig()
+	cli = PyConfig.CLIConfig()
 
 	defaults = [
 		("BUILD_DIR",      "build"),
@@ -20,7 +119,7 @@ def main():
 
 	fishmake.addToolChains(extraToolChains)
 
-	fish = fishmake.FishMake(**{"defaults" : defaults})
+	fish = FishMake(**{"defaults" : defaults})
 	fish.configure()
 	if   cli[0] == "clean":
 		return fish.clean()
