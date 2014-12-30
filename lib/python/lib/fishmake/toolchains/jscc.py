@@ -14,7 +14,7 @@ class ToolChain(fishmake.ToolChain):
 	
 	def buildCommands(self, app):
 		includes = ".:${JSCC_INCLUDE_DIRS}"
-		for include in self.config["INCLUDE_DIRS"]:
+		for include in app["INCLUDE_DIRS"]:
 			if include == "":
 				continue
 			includes += ":" + include

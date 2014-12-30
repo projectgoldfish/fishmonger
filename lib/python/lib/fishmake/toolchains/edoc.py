@@ -14,6 +14,9 @@ class ToolChain(fishmake.ToolChain):
 	def build(self):
 		pass
 
+	def install(self):
+		pass
+
 	def installDoc(self, app):
 		doc_dir = app.installDocDir("erlang")
 		if os.path.isdir(doc_dir):

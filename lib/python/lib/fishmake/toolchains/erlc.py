@@ -229,7 +229,7 @@ class ToolChain(fishmake.ToolChain):
 
 	def buildCommands(self, app):
 		includes = " "
-		for include in self.config["INCLUDE_DIRS"]:
+		for include in app["INCLUDE_DIRS"]:
 			if include == "":
 				continue
 			includes += "-I " + include + " "
@@ -237,6 +237,9 @@ class ToolChain(fishmake.ToolChain):
 		return ["erlc " + includes + "-o " + app.buildDir() + " " + os.path.join(app.srcDir(), "*.erl"), self.genApp]
 
 	def installApp(self, app):
+		## Too many subroutines rely on self.config to cleanly fix
+		self.config = app
+
 		## copy binaries
 		install_erl_dir = app.installAppDir("lib/erlang/lib")
 		if os.path.exists(install_erl_dir):
@@ -250,7 +253,7 @@ class ToolChain(fishmake.ToolChain):
 		self.installMisc(app)
 
 		main_steps = [self.genShellScript, self.genShellEnvScript, self.genShellConnectScript, self.genConfigFile, self.genCookie]
-		if app.name == self.config["ERL_MAIN"] or app.config["EXECUTABLE"] == True:
+		if app.name == app["ERL_MAIN"] or app["EXECUTABLE"] == True:
 			for step in main_steps:
 				step(app)
 	

@@ -42,6 +42,7 @@ class FishMake():
 		##        be compiled by fishmake.
 		## 3: Configure apps for tool chains
 		## 4: Determine build order
+		print "Configuring"
 
 		app_dirs = [retrieveCode(self.config.get("DEP_DIR", "dep"), codebase) for codebase in self.config.get("DEPENDENCIES", [])] + \
 			PyDir.getDirDirs(self.config["SRC_DIR"])
@@ -59,6 +60,9 @@ class FishMake():
 				if dep_dir in app_dirs:
 					continue
 				app_dirs.append(dep_dir)
+
+		self.config["INCLUDE_DIRS"] = self.config.getDirs("INCLUDE_DIRS") + PyDir.findDirsByName("include")
+		self.config["LIB_DIRS"]     = self.config.getDirs("LIB_DIRS")     + PyDir.findDirsByName("lib")
 
 		tcs_byName          = {}
 		appNames_by_tcName  = {}
@@ -93,58 +97,27 @@ class FishMake():
 						tcNames_by_appName[appName] = [tc.getName()]
 
 		## We need to determine build order for tool chains.
-		tc_priorities  = {}
-		app_priorities = {}
-		for x in tcs_byName.values():
-			tc_priorities[x.name]  = x.prerequisiteTools()
-			
-		for x in apps_byName.values():
-			app_priorities[x.name] = x.prerequisiteApps()
+		tc_priorities  = {x.name : PySet.Set(x.prerequisiteTools()) for x in tcs_byName.values()}
+		app_priorities = {x.name : PySet.Set(x.prerequisiteApps())  for x in apps_byName.values()}
+		
+		## Get tool chains that apps depend on 
+		tc_app_priori = {}
+		for app_priori in app_priorities:
+			tc_app_priori[app_priori] = PySet.Set()
+			for app in app_priorities[app_priori]:
+				tc_app_priori[app_priori].add(tcNames_by_appName[app])
 
-		## We have tool chain orders and app orders
-		## We need to generate a mapping of toolchains -> apps that respect these.
-		tc_apps = {x : PySet.Set(appNames_by_tcName[x]) for x in appNames_by_tcName.keys()}
-		print "tc_prio", tc_priorities
-		for tc in tc_priorities:
-			print "tc", tc
-			for tc_p in tc_priorities[tc]:
-				print "tc_p", tc_p
-				tc_apps[tc].add(appNames_by_tcName[tc_p])
+		## Remove toolchains that build the app.
+		for app in tc_app_priori:
+			tc_app_priori[app].remove(tcNames_by_appName[app])
+	
+		app_tc_priori = {x : PySet.Set() for x in tcs_byName.keys()}
+		for app in tc_app_priori:
+			for tc in tcNames_by_appName[app]:
+				app_tc_priori[tc].add(tc_app_priori[app])
 
-		print appNames_by_tcName
-		print tc_priorities
-		print "TCAPP", tc_apps
-
-
-		## We need to determine our priorities. 
-		## Get all tools 0 prereqs
-		## For each tool get a list of apps
-		## sort lists:
-
-		tc_order = []
-		while tc_priorities != {}:
-			tc_addable = []
-			for tc in tc_priorities:
-				if tc_priorities[tc] == []:
-					tc_addable.append(tc)
-			for tc in tc_addable:
-				del tc_priorities[tc]
-
-			## We now need to figure out the order these should be run
-			while tc_addable != []:
-				print "TPC", tc_priorities
-				print "TCA", tc_addable
-				app_lists = []
-				for tc in tc_addable:
-					app_lists.append(tc_apps[tc])
-				print app_lists
-				break
-				pass
-			break
-
-
-
-
+		tool_chain_order = PyUtil.determinePriority(app_tc_priori)
+		self.tool_chains = [tcs_byName[x] for x in tool_chain_order]
 
 	def build(self):
 		print "Building"

@@ -86,6 +86,8 @@ class ToolChain(object):
 		elif not isinstance(self.extensions, list):
 			raise Exception("%s MUST define a list of extensions during __init__!" % self.__class__)
 
+		self.base_config = fish_config
+
 		self.config = PyConfig.Config()
 		self.config.merge(self.defaults)
 		self.config.merge(PyConfig.FileConfig(os.path.join(".", ".fishmake." + self.name)))
@@ -103,13 +105,20 @@ class ToolChain(object):
 
 				app_prerequisites[config.name] = config.prerequisiteApps()
 
-		self.app_order = PyUtil.determinePriority(app_prerequisites)
-		
+		app_order = PyUtil.determinePriority(app_prerequisites)
+		self.apps = []
+		for app in app_order:
+			if app in self.app_configs_byName:
+				self.apps.append(self.getAppConfig(app))
+
 		## Return the list of apps used
 		return self.app_configs_byName.keys()
 
 	def build(self):
 		for app in self.apps:
+			app_config = {}
+
+
 			print "====>", app.name
 			if not os.path.isdir(app.buildDir()):
 				os.mkdir(app.buildDir())
@@ -122,9 +131,9 @@ class ToolChain(object):
 						cmd(app)
 					elif isinstance(cmd, basestring):
 						if PyUtil.shell(cmd, prefix="======>", stdout=True, stderr=True) != 0:
-							raise Exception("Failure compiling %s during: %s" % (app.name, cmd))
+							raise Exception("Failure compiling %s during: %s" % (app, cmd))
 					else:
-						raise Exception("Invalid build cmd. Cmds must be string or fun: %s : %s" % (app.name, cmd))
+						raise Exception("Invalid build cmd. Cmds must be string or fun: %s : %s" % (app, cmd))
 
 			except Exception as e:
 				print "======> Error compiling:", e
@@ -147,6 +156,13 @@ class ToolChain(object):
 		if not hasattr(self, "config"):
 			return []
 		return self.config.get("BUILD_AFTER_TOOLS", [])
+
+	def getAppConfig(self, app_name):
+		config = AppConfig(self.app_configs_byName[app_name].dir)
+		config.merge(self.base_config)
+		config.merge(self.tc_configs_byAppName[app_name])
+		config.merge(self.app_configs_byName[app_name])
+		return config
 
 	def getName(self):
 		if not hasattr(self, "name"):
