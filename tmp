@@ -1,0 +1,87 @@
+print "Configuring"
+		## Get base config
+		self.config.merge(PyConfig.FileConfig(".fishmake"))
+
+		## Get all app_dirs
+		app_dirs = self.config.getDirs("APP_DIRS") + PyDir.getDirDirs(self.config["SRC_DIR"])
+		                       
+		## We have the app dirs.
+		app_config = {}
+		for app_dir in app_dirs:
+			## Make an AppConfig for this appdir
+			tconfig = fishmake.AppConfig(app_dir)
+			if tconfig.name in app_config:
+				continue
+			print "==>", app_dir
+		
+			tconfig.merge(self.config)
+		
+			## Update it with any .fishmake in it's directory.
+			tconfig.merge(PyConfig.FileConfig(os.path.join(app_dir, ".fishmake")))
+			app_config[tconfig.name] = tconfig
+		
+			for (name, url) in tconfig.get("DEPENDENCIES", []):
+				tconfig["BUILD_AFTER_APPS"].append(name)
+				target_dir = os.path.join(self.config["DEP_DIR"], name)
+				if not os.path.isdir(target_dir):
+					PyRCS.clone(url, target_dir)
+				else:
+					PyRCS.update(target_dir)
+				app_dirs.append(target_dir)
+
+		## Process the base config
+		self.config["INCLUDE_DIRS"] = self.config.getDirs("INCLUDE_DIRS") + PyDir.findDirsByName("include")
+		self.config["LIB_DIRS"]     = self.config.getDirs("LIB_DIRS")     + PyDir.findDirsByName("lib")
+		for tconfig in app_config:
+			app_config[tconfig]["INCLUDE_DIRS"] = self.config["INCLUDE_DIRS"]
+			app_config[tconfig]["LIB_DIRS"]     = self.config["LIB_DIRS"]
+
+		## Configure tool_chains.
+		## Determine which we use/dont.
+		tool_chains         = {}
+		tool_chain_prereqs  = {}
+		app_prereqs         = {}
+
+		print "Apps", app_config.keys()
+
+		## Configure special toolchains.
+		## Any app built by one of these is only built by this.
+		## Do not configure it for other tool chains.
+		for tool_chain in fishmake.ExternalToolChains:
+			tc = tool_chain.ToolChain(config=self.config)
+			print "==>", tc.name()
+			res = tc.configure(app_config.values())
+			if res != []:
+				tool_chains[tc.name()]         = tc
+				tool_chain_prereqs[tc.name()]  = tc.prerequisiteTools()
+				app_prereqs[tc.name()]         = tc.prerequisiteApps()
+				for app in res:
+					del app_config[app]
+
+		print "Remaining", app_config.keys()
+
+		for tool_chain in fishmake.ToolChains:
+			tc = tool_chain.ToolChain(config=self.config)
+			print "==>", tc.name()
+			if tc.configure(app_config.values()) != []:
+				tool_chains[tc.name()]         = tc
+				tool_chain_prereqs[tc.name()]  = tc.prerequisiteTools()
+				app_prereqs[tc.name()]         = tc.prerequisiteApps()
+
+		print "\nPreOrder", tool_chain_prereqs, "\n"
+
+		print "\nPreOrder", app_prereqs, "\n"
+
+		## Get priority list
+		tool_chain_order = PyUtil.mergePrioritizedLists(tool_chain_prereqs.values())
+
+		print "\nOrder", tool_chain_order, "\n"
+
+		## Make certain all elements are in priority list
+		tool_chain_order = PyUtil.prioritizeList(tool_chains.keys(), tool_chain_order)
+
+		print "\nOrder", tool_chain_order, "\n"
+		
+		self.tool_chains = []
+		for tool_chain in tool_chain_order:
+			self.tool_chains.append(tool_chains[tool_chain])

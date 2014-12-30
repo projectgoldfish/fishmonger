@@ -220,12 +220,12 @@ class ToolChain(fishmake.ToolChain):
 	
 	## Generate language specific configuration
 	## Return True if we are used, false if not
-	def configure(self, app_config):
-		defaults = {
+	def __init__(self):
+		self.extensions = ["erl"]
+		self.defaults   = {
 			"BUILD_DIR"  : "ebin",
 			"EXECUTABLE" : "false"
 		}
-		return self.doConfigure(file=".fishmake.erlc", extensions=["erl"], defaults=defaults, app_config=app_config)
 
 	def buildCommands(self, app):
 		includes = " "
@@ -257,6 +257,3 @@ class ToolChain(fishmake.ToolChain):
 
 	def doc(self):
 		pass
-
-	def name(self):
-		return "erlc"

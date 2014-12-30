@@ -5,6 +5,16 @@ import pybase.config as PyConfig
 import pybase.dir    as PyDir
 import pybase.rcs    as PyRCS
 import pybase.util   as PyUtil
+import pybase.set    as PySet
+
+def retrieveCode(target, codebase):
+	(name, url) = codebase
+	target_dir = os.path.join(target, name)
+	if not os.path.isdir(target_dir):
+		PyRCS.clone(url, target_dir)
+	else:
+		PyRCS.update(target_dir)
+	return target_dir
 
 class FishMake():
 	def __init__(self, config={}, defaults={}):
@@ -15,74 +25,131 @@ class FishMake():
 		self.config.merge(sys_config)
 		self.config.merge(cli_config)
 		self.config.merge(config)
+		self.config.merge(PyConfig.FileConfig(".fishmake"))
 
 	## We have to detect the applicaiton folders and generate base app
 	## configurations here. Caling doConfigure will fill in the blanks.
 	## Once we do that we can setup the tool chains
-	def configure(self, app_config={}):
-		print "Configuring"
-		## Get base config
-		self.config.merge(PyConfig.FileConfig(".fishmake"))
+	def configure(self):
+		## 0: For each src app
+		##    0a: Checkout/update the src
+		## 1: For each app
+		##    1a: Generate an app config.
+		##    1b: For each dependency
+		##        1b1: Checkout/update the dependency
+		## 2: Configure external toolchains.
+		##    2a: Any app that is used by an external toolchain is to not
+		##        be compiled by fishmake.
+		## 3: Configure apps for tool chains
+		## 4: Determine build order
 
-		app_dirs = self.config.getDirs("APP_DIRS") + PyDir.getDirDirs(self.config["SRC_DIR"])
-		                       
-		## We have the app dirs.
-		app_config = {}
+		app_dirs = [retrieveCode(self.config.get("DEP_DIR", "dep"), codebase) for codebase in self.config.get("DEPENDENCIES", [])] + \
+			PyDir.getDirDirs(self.config["SRC_DIR"])
+
+		apps_byName = {}
+		## For each app
 		for app_dir in app_dirs:
-			## Make an AppConfig for this appdir
-			tconfig = fishmake.AppConfig(app_dir)
-			if tconfig.name in app_config:
-				continue
-			print "==>", app_dir
+			## Generate config
+			t_appconfig = fishmake.AppConfig(app_dir)
+			apps_byName[t_appconfig.name] = t_appconfig
 
-			tconfig.merge(self.config)
+			## For each dependency
+			dep_dirs = [retrieveCode(self.config.get("DEP_DIR", "dep"), codebase) for codebase in t_appconfig.get("DEPENDENCIES", [])]
+			for dep_dir in dep_dirs:
+				if dep_dir in app_dirs:
+					continue
+				app_dirs.append(dep_dir)
 
-			## Update it with any .fishmake in it's directory.
-			tconfig.merge(PyConfig.FileConfig(os.path.join(app_dir, ".fishmake")))
-			app_config[tconfig.name] = tconfig
+		tcs_byName          = {}
+		appNames_by_tcName  = {}
+		tcNames_by_appName  = {}
+		t_apps_byName       = dict(apps_byName)
+		## Configure External ToolChains
+		for ext_tc in fishmake.ExternalToolChains:
+			tc = ext_tc.ToolChain()
+			print "==>", tc.getName()
+			res = tc.configure(self.config, t_apps_byName.values())
+			if isinstance(res, list) and res != []:
+				tcs_byName[tc.getName()]         = tc
+				appNames_by_tcName[tc.getName()] = res
+				for appName in res:
+					del t_apps_byName[appName]
+					if appName in tcNames_by_appName:
+						tcNames_by_appName[appName].append(tc.getName())
+					else:
+						tcNames_by_appName[appName] = [tc.getName()]
 
-			for (target, url) in tconfig.get("DEPENDENCIES", []):
-				target_dir = os.path.join(self.config["DEP_DIR"], target)
-				if not os.path.isdir(target_dir):
-					PyRCS.clone(url, target_dir)
-				else:
-					PyRCS.update(target_dir)
-				app_dirs.append(target_dir)
+		for int_tc in fishmake.InternalToolChains:
+			tc = int_tc.ToolChain()
+			print "==>", tc.getName()
+			res = tc.configure(self.config, t_apps_byName.values())
+			if isinstance(res, list) and res != []:
+				tcs_byName[tc.getName()]         = tc
+				appNames_by_tcName[tc.getName()] = res
+				for appName in res:
+					if appName in tcNames_by_appName:
+						tcNames_by_appName[appName].append(tc.getName())
+					else:
+						tcNames_by_appName[appName] = [tc.getName()]
 
-		app_config = app_config.values()
+		## We need to determine build order for tool chains.
+		tc_priorities  = {}
+		app_priorities = {}
+		for x in tcs_byName.values():
+			tc_priorities[x.name]  = x.prerequisiteTools()
+			
+		for x in apps_byName.values():
+			app_priorities[x.name] = x.prerequisiteApps()
 
-		## Process the base config
-		self.config["INCLUDE_DIRS"] = self.config.getDirs("INCLUDE_DIRS") + PyDir.findDirsByName("include")
-		self.config["LIB_DIRS"]     = self.config.getDirs("LIB_DIRS")     + PyDir.findDirsByName("lib")
-		for tconfig in app_config:
-			tconfig["INCLUDE_DIRS"] = self.config["INCLUDE_DIRS"]
-			tconfig["LIB_DIRS"]     = self.config["LIB_DIRS"]
+		## We have tool chain orders and app orders
+		## We need to generate a mapping of toolchains -> apps that respect these.
+		tc_apps = {x : PySet.Set(appNames_by_tcName[x]) for x in appNames_by_tcName.keys()}
+		print "tc_prio", tc_priorities
+		for tc in tc_priorities:
+			print "tc", tc
+			for tc_p in tc_priorities[tc]:
+				print "tc_p", tc_p
+				tc_apps[tc].add(appNames_by_tcName[tc_p])
 
-		## Configure tool_chains.
-		## Determine which we use/dont.
-		tool_chains         = {}
-		tool_chain_prereqs  = {}
-		for tool_chain in fishmake.ToolChains:
-			tc = tool_chain.ToolChain(config=self.config)
-			print "==>", tc.name()
-			if tc.configure(app_config):
-				tool_chains[tc.name()]         = tc
-				tool_chain_prereqs[tc.name()]  = tc.prerequisiteTools()
+		print appNames_by_tcName
+		print tc_priorities
+		print "TCAPP", tc_apps
 
-		## Get priority list
-		tool_chain_order = PyUtil.mergePrioritizedLists(tool_chain_prereqs.values())
 
-		## Make certain all elements are in priority list
-		tool_chain_order = PyUtil.prioritizeList(tool_chains.keys(), tool_chain_order)
-		
-		self.tool_chains = []
-		for tool_chain in tool_chain_order:
-			self.tool_chains.append(tool_chains[tool_chain])
+		## We need to determine our priorities. 
+		## Get all tools 0 prereqs
+		## For each tool get a list of apps
+		## sort lists:
+
+		tc_order = []
+		while tc_priorities != {}:
+			tc_addable = []
+			for tc in tc_priorities:
+				if tc_priorities[tc] == []:
+					tc_addable.append(tc)
+			for tc in tc_addable:
+				del tc_priorities[tc]
+
+			## We now need to figure out the order these should be run
+			while tc_addable != []:
+				print "TPC", tc_priorities
+				print "TCA", tc_addable
+				app_lists = []
+				for tc in tc_addable:
+					app_lists.append(tc_apps[tc])
+				print app_lists
+				break
+				pass
+			break
+
+
+
+
 
 	def build(self):
 		print "Building"
 		for tool_chain in self.tool_chains:
-			print "==>", tool_chain.name()
+			print "==>", tool_chain.name
 			tool_chain.build()
 
 	def install(self):
@@ -92,13 +159,13 @@ class FishMake():
 			if not os.path.exists(tnix_dir):
 				os.makedirs(tnix_dir)
 		for tool_chain in self.tool_chains:
-			print "==>", tool_chain.name()
+			print "==>", tool_chain.name
 			tool_chain.install()
 
 	def doc(self):
 		print "Documenting"
 		for tool_chain in self.tool_chains:
-			print "==>", tool_chain.name()
+			print "==>", tool_chain.name
 			tool_chain.doc()
 
 def main():
@@ -129,6 +196,8 @@ def main():
 		return fish.install()
 	elif cli[0] == "doc":
 		return fish.doc()
+	elif cli[0] == "test":
+		return 0
 	else:
 		print "Usage: fishmake <clean|build|compile|install|doc> [ToolChain[s]]"
 		return 0

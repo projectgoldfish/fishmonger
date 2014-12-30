@@ -6,12 +6,12 @@ import os.path
 import fishmake
 
 class ToolChain(fishmake.ToolChain):
-	def configure(self, app_config):
-		defaults = {
+	def __init__(self):
+		self.defaults   = {
 			"BUILD_DIR" : "js"
 		}
-		return self.doConfigure(file=".fishmake.jscc", extensions=["js"], app_config=app_config, defaults=defaults)
-
+		self.extensions = ["js"]
+	
 	def buildCommands(self, app):
 		includes = ".:${JSCC_INCLUDE_DIRS}"
 		for include in self.config["INCLUDE_DIRS"]:
@@ -34,11 +34,6 @@ class ToolChain(fishmake.ToolChain):
 
 	def doc(self):
 		pass
-
-	def name(self):
-		return "jscc"
-
-
 
 
 

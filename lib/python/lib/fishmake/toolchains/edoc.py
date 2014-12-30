@@ -8,15 +8,10 @@ import shutil
 import fishmake
 
 class ToolChain(fishmake.ToolChain):
-	## Generate language specific configuration
-	## Return True if we are used, false if not
-	def configure(self, app_config):
-		return self.doConfigure(file=".fishmake.edoc", extensions=["erl"], app_config=app_config)
+	def __init__(self):
+		self.extensions = ["erl"]
 
 	def build(self):
-		pass
-
-	def install(self):
 		pass
 
 	def installDoc(self, app):
@@ -26,6 +21,3 @@ class ToolChain(fishmake.ToolChain):
 			os.makedirs(doc_dir)
 
 		PyUtil.shell("erl -noshell -run edoc_run application '" + app.name + "' '\"" + app.appDir() + "\"' '[{dir, \"" + doc_dir + "\"}]'", prefix="======>", stdout=True, stderr=True)
-
-	def name(self):
-		return "edoc"

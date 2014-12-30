@@ -13,12 +13,19 @@ class AppConfig(PyConfig.Config):
 	def __init__(self, dir):
 		self.dir     = dir
 		self.name    = os.path.basename(dir)
-		self.config  = {}
-		self.parse()
-		pass
+		self.config  = {
+			"BUILD_AFTER_APPS"  : [],
+			"BUILD_DIR"         : "build",
+			"DEPENDENCIES"      : [],
+			"DOC_DIR"           : "doc",
+			"INSTALL_PREFIX"    : "install",
+			"SRC_DIR"           : "src"
+		}
+		self.merge(PyConfig.FileConfig(os.path.join(dir, ".fishmake.app")))
 
-	def parse(self):
-		pass
+		for (name, url) in self.config["DEPENDENCIES"]:
+			if name not in self.config["BUILD_AFTER_APPS"]:
+				self.config["BUILD_AFTER_APPS"].append(name)
 
 	def appDir(self, dir=""):
 		if dir == "":
@@ -27,19 +34,19 @@ class AppConfig(PyConfig.Config):
 			return os.path.join(self.dir, dir)
 
 	def buildDir(self, dir=""):
-		build_dir = os.path.join(self.dir, self.config.get("BUILD_DIR", "build"))
+		build_dir = os.path.join(self.dir, self.config["BUILD_DIR"])
 		return os.path.join(build_dir, dir)
 
 	def docDir(self, dir=""):
-		doc_dir = os.path.join(self.dir, self.config.get("DOC_DIR", "doc"))
+		doc_dir = os.path.join(self.dir, self.config["DOC_DIR"])
 		return os.path.join(doc_dir, dir)
 
 	def srcDir(self, dir=""):
-		src_dir = os.path.join(self.dir, self.config.get("SRC_DIR", "src"))
+		src_dir = os.path.join(self.dir, self.config["SRC_DIR"])
 		return os.path.join(src_dir, dir)
 
 	def installDir(self, dir=""):
-		return os.path.join(self.config.get("INSTALL_PREFIX", "install"), dir)
+		return os.path.join(self.config["INSTALL_PREFIX"], dir)
 
 	def installAppDir(self, dir=""):
 		install_app_dir = os.path.join(self.installDir(dir), self.name)
@@ -50,24 +57,12 @@ class AppConfig(PyConfig.Config):
 		return os.path.join(doc_dir, self.name + "-" + PyRCS.getVersion())
 
 	def prerequisiteApps(self):
-		return self.config.get("BUILD_AFTER_APPS", [])
-
-	def prerequisiteTools(self):
-		return self.config.get("BUILD_AFTER_TOOLS", [])
+		return self.config["BUILD_AFTER_APPS"]
 
 class ToolChain(object):
-	def __init__(self, config={}, defaults={}):
-		cli_config  = PyConfig.CLIConfig()
-		sys_config  = PyConfig.SysConfig()
-		self.config = PyConfig.Config()
-		self.config.merge(defaults)
-		self.config.merge(sys_config)
-		self.config.merge(cli_config)
-		self.config.merge(config)
-
 	## Functions that MUST be implemented
-	def configure(self, **kwargs):
-		raise Exception("%s does not implement configure!" % self.__class__)
+	def __init__(self):
+		raise Exception("%s MUST implement init!" % self.__class__)
 
 	def buildCommands(self, app):
 		raise Exception("%s MUST implement buildCommands or override build!" % self.__class__)
@@ -76,38 +71,42 @@ class ToolChain(object):
 		raise Exception("%s MUST implement installApp or override install!" % self.__class__)
 
 	def installDoc(self, app):
-		raise Exception("%s MUST implement installDoc or override doc!" % self.__class__)		
-
-	def name(self):
-		raise Exceltion("%s is unnamed!", self.__class__)
+		raise Exception("%s MUST implement installDoc or override doc!" % self.__class__)
 
 	## Functions that MAY be implemented, but have default behavior that should be good enough.
-	def doConfigure(self, file=None, extensions=[], defaults={}, app_config=[]):
-		self.config.merge(defaults)
-		self.config.merge(PyConfig.FileConfig(file))
+	def configure(self, fish_config, app_configs):
+	#def configure(self, file=None, extensions=[], defaults={}, app_config=[]):
+		self.getName()
 
-		apps = {}
-		for config in app_config:
-			if PyDir.findFilesByExts(extensions, config.srcDir()) != []:
+		if not hasattr(self, "defaults"):
+			self.defaults = {}
+
+		if not hasattr(self, "extensions"):
+			raise Exception("%s MUST define a list of extensions during __init__!" % self.__class__)
+		elif not isinstance(self.extensions, list):
+			raise Exception("%s MUST define a list of extensions during __init__!" % self.__class__)
+
+		self.config = PyConfig.Config()
+		self.config.merge(self.defaults)
+		self.config.merge(PyConfig.FileConfig(os.path.join(".", ".fishmake." + self.name)))
+
+		app_prerequisites         = {}
+		self.tc_configs_byAppName = {}
+		self.app_configs_byName   = {}
+		for config in app_configs:
+			if PyDir.findFilesByExts(self.extensions, config.srcDir()) != []:
 				## Update the tool chain config based on this applications specific toolchain config.
-				apps[config.name] = AppConfig(config.appDir())
-				apps[config.name].merge(self.config)
-				apps[config.name].merge(PyConfig.FileConfig(os.path.join(config.appDir(), file)))
+				self.tc_configs_byAppName[config.name] = self.config.clone()
+				self.tc_configs_byAppName[config.name].merge(PyConfig.FileConfig(os.path.join(config.appDir(), ".fishmake." + self.name)))
 
-		## We need to sort the apps based on what they require
-		## Make a dict of app:requirements to make this easier
-		requirements = {}
-		for app in apps:
-			requirements[app] = apps[app].prerequisiteApps()
+				self.app_configs_byName[config.name] = config
 
-		self.apps   = []
-		build_order = PyUtil.determinePriority(requirements)
-		build_order = PyUtil.prioritizeList(apps.keys(), build_order)
-		for app in build_order:
-			self.apps.append(apps[app])
+				app_prerequisites[config.name] = config.prerequisiteApps()
 
-		## If apps is [] we do not need this tool chain
-		return apps != []	
+		self.app_order = PyUtil.determinePriority(app_prerequisites)
+		
+		## Return the list of apps used
+		return self.app_configs_byName.keys()
 
 	def build(self):
 		for app in self.apps:
@@ -145,11 +144,14 @@ class ToolChain(object):
 	def prerequisiteTools(self):
 		## Get the toolchains for the apps, then merge
 		## to get the toolchains for this toolchain
-		tool_chains = []
-		for app in self.apps:
-			tool_chains.append(app.prerequisiteTools())
-		return PyUtil.mergePrioritizedLists(tool_chains)
+		if not hasattr(self, "config"):
+			return []
+		return self.config.get("BUILD_AFTER_TOOLS", [])
 
+	def getName(self):
+		if not hasattr(self, "name"):
+			self.name   = self.__module__.split(".")[-1:][0]
+		return self.name;
 
 def addToolChains(array, target="ToolChains", prefix=""):
 	if prefix != "":
@@ -160,11 +162,11 @@ def addToolChains(array, target="ToolChains", prefix=""):
 		modules.append(prefix + c)
 	PyUtil.loadModules(modules, target)
 
-ToolChains = []
-Dependents = []
+InternalToolChains = []
+ExternalToolChains = []
 
-addToolChains(fishmake.toolchains.available(),  ToolChains, "fishmake.toolchains");
-addToolChains(fishmake.toolchains.dependable(), Dependents, "fishmake.toolchains");
+addToolChains(fishmake.toolchains.internal(), InternalToolChains, "fishmake.toolchains");
+addToolChains(fishmake.toolchains.external(), ExternalToolChains, "fishmake.toolchains");
 
 ## Directories that a built app should contain.
 NIXDirs  = ["bin", "doc", "etc", "lib", "sbin", "var", "var/log", "var/run"]

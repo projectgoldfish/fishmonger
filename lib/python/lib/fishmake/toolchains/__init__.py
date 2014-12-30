@@ -1,4 +1,4 @@
-def available():
+def internal():
 	return [
 		"gplusplus",
 		"erlc",
@@ -7,8 +7,7 @@ def available():
 		"jsdoc"
 	]
 
-def dependable():
+def external():
 	return [
-		"fishmaker",
 		"rebar"
 	]

@@ -10,14 +10,15 @@ import fishmake
 class ToolChain(fishmake.ToolChain):
 	## Generate language specific configuration
 	## Return True if we are used, false if not
-	def configure(self, app_config):
-		defaults = {
-			"BUILD_DIR" : "js"
-		}
-		return self.doConfigure(file=".fishmake.jsdoc", extensions=["js"], app_config=app_config, defaults=defaults)
 
-	def buildCommands(self, app):
-		return []
+	def __init__(self):
+		self.extensions = ["js"]
+		self.defaults   = {
+			"BUILD_DIR"  : "js"
+		}
+
+	def build(self):
+		pass
 
 	def install(self):
 		pass
@@ -35,6 +36,3 @@ class ToolChain(fishmake.ToolChain):
 			target_files += target_file + " "
 
 		PyUtil.shell("jsdoc -d " + doc_dir + " " + target_files, prefix="======>", stdout=True, stderr=True)
-
-	def name(self):
-		return "jsdoc"

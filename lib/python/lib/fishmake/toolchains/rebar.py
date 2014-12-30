@@ -8,17 +8,20 @@ import shutil
 import fishmake
 
 class ToolChain(fishmake.ToolChain):
+	def __init__(self):
+		pass
+
 	## Generate language specific configuration
 	## Return True if we are used, false if not
-	def configure(self, app_config):
+	def configure(self, fish_config, app_configs):
 		apps = []
-		for config in app_config:
+		for config in app_configs:
 			if os.path.isfile(os.path.join(config.appDir(), "rebar.config")):
 				apps.append(config)
 
 		self.apps = apps
 		## If apps is [] we do not need this tool chain
-		return apps != []
+		return [app.name for app in self.apps]
 
 	def buildCommands(self, app):
 		return ["cd " + app.appDir() + " && rebar compile"]
@@ -37,6 +40,3 @@ class ToolChain(fishmake.ToolChain):
 				install_target = os.path.join(install_erl_dir, dir)
 				if os.path.isdir(install_source):
 					PyDir.copytree(install_source, install_target, True)
-		
-	def name(self):
-		return "rebar"
