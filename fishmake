@@ -61,62 +61,100 @@ class FishMake():
 					continue
 				app_dirs.append(dep_dir)
 
-		self.config["INCLUDE_DIRS"] = self.config.getDirs("INCLUDE_DIRS") + PyDir.findDirsByName("include")
+		## Now that all code is checked out find the lib and include dirs
 		self.config["LIB_DIRS"]     = self.config.getDirs("LIB_DIRS")     + PyDir.findDirsByName("lib")
-
-		tcs_byName          = {}
-		appNames_by_tcName  = {}
-		tcNames_by_appName  = {}
-		t_apps_byName       = dict(apps_byName)
-		## Configure External ToolChains
-		for ext_tc in fishmake.ExternalToolChains:
-			tc = ext_tc.ToolChain()
-			print "==>", tc.getName()
-			res = tc.configure(self.config, t_apps_byName.values())
-			if isinstance(res, list) and res != []:
-				tcs_byName[tc.getName()]         = tc
-				appNames_by_tcName[tc.getName()] = res
-				for appName in res:
-					del t_apps_byName[appName]
-					if appName in tcNames_by_appName:
-						tcNames_by_appName[appName].append(tc.getName())
-					else:
-						tcNames_by_appName[appName] = [tc.getName()]
-
-		for int_tc in fishmake.InternalToolChains:
-			tc = int_tc.ToolChain()
-			print "==>", tc.getName()
-			res = tc.configure(self.config, t_apps_byName.values())
-			if isinstance(res, list) and res != []:
-				tcs_byName[tc.getName()]         = tc
-				appNames_by_tcName[tc.getName()] = res
-				for appName in res:
-					if appName in tcNames_by_appName:
-						tcNames_by_appName[appName].append(tc.getName())
-					else:
-						tcNames_by_appName[appName] = [tc.getName()]
-
-		## We need to determine build order for tool chains.
-		tc_priorities  = {x.name : PySet.Set(x.prerequisiteTools()) for x in tcs_byName.values()}
-		app_priorities = {x.name : PySet.Set(x.prerequisiteApps())  for x in apps_byName.values()}
+		self.config["INCLUDE_DIRS"] = self.config.getDirs("INCLUDE_DIRS") + PyDir.findDirsByName("include")
 		
+		app_names     = apps_byName.keys()
+		app_tcs       = {                 ## App Name -> ToolChains used
+			name : PySet.Set() for name in app_names
+		}               
+		tc_apps       = {}                ## ToolChain.name -> App Names for apps build
+		tcs_byName    = {}                ## String         -> ToolChain() mapping		
+		t_apps_byName = dict(apps_byName) ## Copy made so we can alter it's state
+		## Configure External ToolChains
+		for ToolChains in [fishmake.ExternalToolChains, fishmake.InternalToolChains]:
+			for t_tc in ToolChains:
+				## Generate a tool chain instance.
+				tc         = t_tc.ToolChain()
+				tc_name    = tc.getName()
+
+				## Get the list of apps this toolchain can build
+				buildable_apps = tc.configure(self.config, t_apps_byName.values())
+
+				## If the toolchain builds any apps
+				if isinstance(buildable_apps, list) and buildable_apps != []:
+					## Add it to the list of usable toolchains
+					tcs_byName[tc_name] = tc
+					
+					## Store the apps this toolchain builds
+					tc_apps[tc_name]    = buildable_apps
+
+					for app_name in buildable_apps:
+						## If we're configuring external toolchains then a match
+						## indicats this app should not be available to other toolchains.
+						if ToolChains == fishmake.ExternalToolChains:
+							del t_apps_byName[app_name]
+
+						## Store this tc in the app -> tc map
+						app_tcs[app_name].add(tc_name)
+		
+		## We need to determine build order for tool chains.
+		## Mapping toolchain -> prerequisite toolchains
+		tc_priorities      = {x.name : PySet.Set(x.prerequisiteTools()) for x in tcs_byName.values()}
+		## Mapping app -> prerequisite apps		
+		app_priorities     = {x.name : PySet.Set(x.prerequisiteApps())  for x in apps_byName.values()}
 		## Get tool chains that apps depend on 
-		tc_app_priori = {}
-		for app_priori in app_priorities:
-			tc_app_priori[app_priori] = PySet.Set()
-			for app in app_priorities[app_priori]:
-				tc_app_priori[app_priori].add(tcNames_by_appName[app])
+		app_tcs_priorities = {name : PySet.Set() for name in app_names}
 
-		## Remove toolchains that build the app.
-		for app in tc_app_priori:
-			tc_app_priori[app].remove(tcNames_by_appName[app])
+		## Generate mapping of app -> required toolchains
+		for app_priority in app_priorities:
+			## For each app that this app prioritizes	
+			for app in app_priorities[app_priority]:
+				## add the tool chains that that app uses
+				app_tcs_priorities[app_priority].add(app_tcs[app])
+
+		## We now know all tool chains that must be run before each app.
+		## Some will have the toolchains they themselves used.
+		## Since those chains cant be run before remove them from the mapping
+		for app in app_tcs_priorities:
+			app_tcs_priorities[app].remove(app_tcs[app])
 	
-		app_tc_priori = {x : PySet.Set() for x in tcs_byName.keys()}
-		for app in tc_app_priori:
-			for tc in tcNames_by_appName[app]:
-				app_tc_priori[tc].add(tc_app_priori[app])
+		## We now have a mapping of app -> tcs that must be run before
+		##   any of this app may by built.
+		## Build out a map of all toolchains that must be run prior to
+		##   other toolchains.
+		## For each app
+		for app_tcs_priority in app_tcs_priorities:
+			## The toolchains that this app rely on must also be
+			##   relied upon by the toolchains this app uses
+			## For each toolchain that this app uses
+			for tc in app_tcs[app_tcs_priority]:
+				## Add the toolchains that this app relies on to the toolchain -> toolchain map
+				tc_priorities[tc].add(app_tcs_priorities[app_tcs_priority])
 
-		tool_chain_order = PyUtil.determinePriority(app_tc_priori)
+		## We have the toolchain -> toolchain mapping
+		##   Filter out the toolchains that we decided to skip.
+		t_tc_priorities = dict(tc_priorities)
+		for tc_name in tc_priorities:			
+			## If BUILD_ONLY is set skip the unused toolchains
+			tools_only = self.config.get("TOOLS_ONLY", [])
+			if isinstance(tools_only, list) and tools_only != []:
+				if tc_name not in tools_only:
+					del t_tc_priorities[tc_name]
+			elif tools_only != tc_name:
+				del t_tc_priorities[tc_name]
+
+			## If BUILD_SKIP is set skip the specified toolchains
+			tools_skip = self.config.get("TOOLS_SKIP", [])
+			if isinstance(tools_skip, list):
+				if tc_name in tools_skip:
+					del t_tc_priorities[tc_name]
+			elif tools_skip == tc_name:
+				del t_tc_priorities[tc_name]
+
+		tc_priorities    = t_tc_priorities
+		tool_chain_order = PyUtil.determinePriority(tc_priorities)
 		self.tool_chains = [tcs_byName[x] for x in tool_chain_order]
 
 	def build(self):
