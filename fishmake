@@ -136,11 +136,14 @@ class FishMake():
 		## We have the toolchain -> toolchain mapping
 		##   Filter out the toolchains that we decided to skip.
 		t_tc_priorities = dict(tc_priorities)
+
 		for tc_name in tc_priorities:			
 			## If BUILD_ONLY is set skip the unused toolchains
 			tools_only = self.config.get("TOOLS_ONLY", [])
-			if isinstance(tools_only, list) and tools_only != []:
-				if tc_name not in tools_only:
+			if isinstance(tools_only, list):
+				if tools_only == []:
+					pass
+				elif tc_name not in tools_only:
 					del t_tc_priorities[tc_name]
 			elif tools_only != tc_name:
 				del t_tc_priorities[tc_name]
@@ -148,7 +151,9 @@ class FishMake():
 			## If BUILD_SKIP is set skip the specified toolchains
 			tools_skip = self.config.get("TOOLS_SKIP", [])
 			if isinstance(tools_skip, list):
-				if tc_name in tools_skip:
+				if tools_skip == []:
+					pass
+				elif tc_name in tools_skip:
 					del t_tc_priorities[tc_name]
 			elif tools_skip == tc_name:
 				del t_tc_priorities[tc_name]
