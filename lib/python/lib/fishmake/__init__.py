@@ -169,7 +169,13 @@ class ToolChain(object):
 			self.name   = self.__module__.split(".")[-1:][0]
 		return self.name;
 
-def addToolChains(array, target="ToolChains", prefix=""):
+def addInternalToolChains(array):
+	addToolChains(array, InternalToolChains)
+
+def addExternalToolChains(array):
+	addToolChains(array, ExternalToolChains)	
+
+def addToolChains(array, target="InternalToolChains", prefix=""):
 	if prefix != "":
 		prefix += "."
 

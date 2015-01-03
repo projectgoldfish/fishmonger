@@ -55,7 +55,8 @@ class FishMake():
 			apps_byName[t_appconfig.name] = t_appconfig
 
 			## For each dependency
-			dep_dirs = [retrieveCode(self.config.get("DEP_DIR", "dep"), codebase) for codebase in t_appconfig.get("DEPENDENCIES", [])]
+			dep_dirs = [retrieveCode(self.config.get("DEP_DIR", "dep"), codebase) for codebase in t_appconfig.get("DEPENDENCIES", [])] + \
+				PyDir.getDirDirs(os.path.join(app_dir, t_appconfig.config["SRC_DIR"]))
 			for dep_dir in dep_dirs:
 				if dep_dir in app_dirs:
 					continue
@@ -200,7 +201,9 @@ def main():
 		extraToolChains.append(cli[x])
 		x += 1
 
-	fishmake.addToolChains(extraToolChains)
+	fishmake.addInternalToolChains(extraToolChains)
+	fishmake.addInternalToolChains(cli.get("INTERNAL_TOOLS", []))
+	fishmake.addExternalToolChains(cli.get("EXTERNAL_TOOLS", []))
 
 	fish = FishMake(**{"defaults" : defaults})
 	fish.configure()
