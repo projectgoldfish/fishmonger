@@ -11,9 +11,13 @@ import pybase.set    as PySet
 
 class AppConfig(PyConfig.Config):
 	def __init__(self, dir):
-		self.dir     = dir
-		self.name    = os.path.basename(dir)
-		self.config  = {
+		self.dir      = dir
+		if dir == ".":
+			self.name = os.path.basename(os.getcwd())
+		else:
+			self.name = os.path.basename(dir)
+
+		self.config   = {
 			"BUILD_AFTER_APPS"  : [],
 			"BUILD_DIR"         : "build",
 			"DEPENDENCIES"      : [],
@@ -96,7 +100,7 @@ class ToolChain(object):
 		self.tc_configs_byAppName = {}
 		self.app_configs_byName   = {}
 		for config in app_configs:
-			if PyDir.findFilesByExts(self.extensions, config.srcDir()) != []:
+			if PyDir.findFilesByExts(self.extensions, config.srcDir(), root_only=True) != []:
 				## Update the tool chain config based on this applications specific toolchain config.
 				self.tc_configs_byAppName[config.name] = self.config.clone()
 				self.tc_configs_byAppName[config.name].merge(PyConfig.FileConfig(os.path.join(config.appDir(), ".fishmake." + self.name)))
