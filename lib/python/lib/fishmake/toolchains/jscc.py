@@ -30,7 +30,7 @@ class ToolChain(fishmake.ToolChain):
 			app_install_dir = os.path.join(app.config["INSTALL_PREFIX"], "var/www/js/" + app.name)
 			if not os.path.isdir(app_install_dir):
 				os.makedirs(app_install_dir)
-			PyDir.copytree(app.buildDir(), app_install_dir)
+			PyDir.copytree(app.buildDir(), app_install_dir, force=True)
 
 	def doc(self):
 		pass

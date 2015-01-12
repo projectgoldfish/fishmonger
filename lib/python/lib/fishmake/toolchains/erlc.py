@@ -213,7 +213,7 @@ class ToolChain(fishmake.ToolChain):
 		install_var_dir = app.installDir("var")
 		print "======> Copying content..."
 		if os.path.isdir(var_dir):
-			PyDir.copytree(var_dir, install_var_dir)
+			PyDir.copytree(var_dir, install_var_dir, force=True)
 		
 	## What follows is the fishmake language api
 	## All of the following variables and functions must be made available.
@@ -242,13 +242,11 @@ class ToolChain(fishmake.ToolChain):
 
 		## copy binaries
 		install_erl_dir = app.installAppDir("lib/erlang/lib")
-		if os.path.exists(install_erl_dir):
-			shutil.rmtree(install_erl_dir)
 		for dir in ["priv", "ebin"]:
+			if not os.path.isdir(app.appDir(dir)):
+				continue
 			install_target = os.path.join(install_erl_dir, dir)
-			if os.path.isdir(app.appDir(dir)):
-				os.makedirs(install_target)
-				PyDir.copytree(app.appDir(dir), install_target)
+			PyDir.copytree(app.appDir(dir), install_target, force=True)
 
 		self.installMisc(app)
 
