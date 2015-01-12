@@ -6,8 +6,8 @@ import os.path
 import pybase.config as PyConfig
 import pybase.util   as PyUtil
 import pybase.dir    as PyDir
-import pybase.rcs    as PyRCS
 import pybase.set    as PySet
+import pyrcs         as PyRCS
 
 class AppConfig(PyConfig.Config):
 	def __init__(self, dir):

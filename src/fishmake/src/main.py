@@ -3,10 +3,10 @@ import os
 import fishmake
 import pybase.config as PyConfig
 import pybase.dir    as PyDir
-import pybase.rcs    as PyRCS
 import pybase.util   as PyUtil
 import pybase.set    as PySet
 
+import pyrcs         as PyRCS
 
 class FishMake():
 	def __init__(self, config={}, defaults={}):
@@ -30,10 +30,10 @@ class FishMake():
 		if name not in self.updated_repos:
 			self.updated_repos[name] = True
 			if not os.path.isdir(target_dir):
-				print "==> Fetching:", name
+				print "====> Fetching:", name
 				PyRCS.clone(url, target_dir)
 			else:
-				print "==> Updating:", name
+				print "====> Updating:", name
 				PyRCS.update(target_dir)
 		return target_dir
 
