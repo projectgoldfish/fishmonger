@@ -52,13 +52,20 @@ class AppConfig(PyConfig.Config):
 	def installDir(self, dir=""):
 		return os.path.join(self.config["INSTALL_PREFIX"], dir)
 
-	def installAppDir(self, dir=""):
+	def installAppDir(self, dir="", version=True):
 		install_app_dir = os.path.join(self.installDir(dir), self.name)
-		return install_app_dir + "-" + PyRCS.getVersion()
+		if version:
+			return install_app_dir + "-" + PyRCS.getVersion()
+		else:
+			return install_app_dir
 
-	def installDocDir(self, dir=""):
+	def installDocDir(self, dir="", version=True):
 		doc_dir = os.path.join(self.installDir("doc"), dir)
-		return os.path.join(doc_dir, self.name + "-" + PyRCS.getVersion())
+
+		if version:
+			return os.path.join(doc_dir, self.name + "-" + PyRCS.getVersion())
+		else:
+			return os.path.join(doc_dir, self.name)
 
 	def prerequisiteApps(self):
 		return self.config["BUILD_AFTER_APPS"]

@@ -7,6 +7,7 @@ import pybase.rcs    as PyRCS
 import pybase.util   as PyUtil
 import pybase.set    as PySet
 
+
 class FishMake():
 	def __init__(self, config={}, defaults={}):
 		cli_config  = PyConfig.CLIConfig()
@@ -52,6 +53,7 @@ class FishMake():
 		## 3: Configure apps for tool chains
 		## 4: Determine build order
 		print "Configuring"
+		print "==> Updating codebases"
 		app_dirs = ["."] + [self.retrieveCode(self.config.get("DEP_DIR", "dep"), codebase) for codebase in self.config.get("DEPENDENCIES", [])] + \
 			PyDir.getDirDirs(self.config["SRC_DIR"])
 

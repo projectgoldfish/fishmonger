@@ -4,7 +4,8 @@ def internal():
 		"erlc",
 		"edoc",
 		"jscc",
-		"jsdoc"
+		"jsdoc",
+		"python"
 	]
 
 def external():

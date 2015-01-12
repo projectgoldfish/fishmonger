@@ -30,7 +30,7 @@ class ToolChain(fishmake.ToolChain):
 		for app in self.apps:
 			PyUtil.shell("cd " + app.appDir() + " && rebar doc")
 			doc_dir = app.installDocDir("erlang")
-			PyDir.copytree(os.path.join(app.appDir(), "doc"), doc_dir, True)
+			PyDir.copytree(os.path.join(app.appDir(), "doc"), doc_dir, force=True)
 
 	def install(self):
 		for app in self.apps:
@@ -39,4 +39,4 @@ class ToolChain(fishmake.ToolChain):
 				install_source = os.path.join(app.appDir(), dir)
 				install_target = os.path.join(install_erl_dir, dir)
 				if os.path.isdir(install_source):
-					PyDir.copytree(install_source, install_target, True)
+					PyDir.copytree(install_source, install_target, force=True)
