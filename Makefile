@@ -1,6 +1,9 @@
 all: fishmake-libs
 	@PYTHONPATH=${PYTHONPATH}:py-libs ./src/fishmake/src/main.py install --SKIP_UPDATE True
 
+full: fishmake-libs
+	@PYTHONPATH=${PYTHONPATH}:py-libs ./src/fishmake/src/main.py install
+
 init: clone-libs install-libs
 	
 update: update-libs install-libs
@@ -26,6 +29,6 @@ install-libs:
 	@cp -r py-deps/pyrcs/src/*  py-libs/pyrcs
 
 update-libs:
-	@cd py-deps/pybase && git update
-	@cd py-deps/pyerl  && git update
-	@cd py-deps/pyrcs  && git update
+	@cd py-deps/pybase && git pull
+	@cd py-deps/pyerl  && git pull
+	@cd py-deps/pyrcs  && git pull
