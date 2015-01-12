@@ -22,12 +22,9 @@ class ToolChain(fishmake.ToolChain):
 	def installApp(self, app):
 		self.installLibrary(app)
 
-		py_mains = app.get("PY_MAIN", [])
-		if app.get("PY_MAIN", None) != None:
-			if isinstance(py_mains, str):
-				py_mains = [py_mains]
-			for py_main in py_mains:
-				self.installApplication(py_main, app)
+		py_main = app.get("PY_MAIN", None)
+		if py_main != None:
+			self.installApplication(py_main, app)
 			
 
 	def doc(self):
