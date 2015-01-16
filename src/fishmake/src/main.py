@@ -24,8 +24,6 @@ class FishMake():
 	def retrieveCode(self, target, codebase):
 		(name, url) = codebase
 		target_dir = os.path.join(target, name)
-		if self.config.get("SKIP_UPDATE", "False").upper() == "TRUE":
-			return target_dir
 		
 		if name not in self.updated_repos:
 			self.updated_repos[name] = True
@@ -33,8 +31,9 @@ class FishMake():
 				print "====> Fetching:", name
 				PyRCS.clone(url, target_dir)
 			else:
-				print "====> Updating:", name
-				PyRCS.update(target_dir)
+				if self.config.get("SKIP_UPDATE", "False").upper() != "TRUE":
+					print "====> Updating:", name
+					PyRCS.update(target_dir)
 		return target_dir
 
 	## We have to detect the applicaiton folders and generate base app
