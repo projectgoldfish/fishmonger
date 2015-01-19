@@ -32,7 +32,7 @@ class ToolChain(fishmake.ToolChain):
 
 	def installApplication(self, py_main, app):
 		py_lib    = PyDir.makeDirAbsolute(app.installDir("lib/python/lib"))
-		py_main   = os.path.join(app.installAppDir("lib/python/lib", version=False), py_main)
+		py_main   = PyDir.makeDirAbsolute(os.path.join(app.installAppDir("lib/python/lib", version=False), py_main))
 
 		app_code  = "#! /bin/bash\n"
 		app_code += "PYTHONPATH=${PYTHONPATH}:%s python %s $@" % (py_lib, py_main)

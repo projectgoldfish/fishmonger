@@ -67,11 +67,16 @@ class ToolChain(fishmake.ToolChain):
 	## Looks in each app dir for a $APP.app.fish file
 	## uses it to generate a .app
 	def genApp(self, app):
-		app_src  = app.srcDir(app.name + ".app.fish")
+		app_src  = app.srcDir(app.name + ".app.erlc")
 		app_file = app.buildDir(app.name + ".app")
 		if os.path.isfile(app_src):
 			doc  = ErlApp(app_src, app)
 			doc.write(app_file)
+		else:
+			app_src = app.srcDir(app.name + ".app")
+			if os.path.isfile(app_src):
+				shutil.copyfile(app_src, app_file)
+
 
 	## Look at the applications entry of the app.
 	## If we have app.app in our intall directory then
@@ -120,7 +125,7 @@ class ToolChain(fishmake.ToolChain):
 		for tapp in apps:
 			start_apps += "-eval \"application:start(" + tapp + ")\" "
 		
-		cookie_file = os.path.join(app.installAppDir("var/run"), ".cookie")
+		cookie_file = os.path.join(app.installAppDir("var/run", version=False), ".cookie")
 		file_name   = os.path.join(app.installDir("bin"),     app_name)
 		erl_dirs    = app.installDir("lib/erlang/lib/")
 		config_file = os.path.join(app.installDir("etc"), app_name + ".config")
@@ -136,7 +141,7 @@ class ToolChain(fishmake.ToolChain):
 		app_name    = app.name
 		install_dir = app.installDir("")
 
-		cookie_file = os.path.join(app.installAppDir("var/run"), ".cookie")
+		cookie_file = os.path.join(app.installAppDir("var/run", version=False), ".cookie")
 		file_name   = os.path.join(app.installDir("bin"),     app_name + "-connect")
 		erl_dirs    = app.installDir("lib/erlang/lib/")
 
@@ -151,7 +156,7 @@ class ToolChain(fishmake.ToolChain):
 		app_name    = app.name
 		install_dir = app.installDir("")
 
-		cookie_file = os.path.join(app.installAppDir("var/run"), ".cookie")
+		cookie_file = os.path.join(app.installAppDir("var/run", version=False), ".cookie")
 		file_name   = os.path.join(app.installDir("bin"),     app_name + "-env")
 		erl_dirs    = app.installDir("lib/erlang/lib/")
 		config_file = os.path.join(app.installDir("etc"), app_name + ".config")
@@ -167,7 +172,7 @@ class ToolChain(fishmake.ToolChain):
 	## Generates the cookie file
 	def genCookie(self, app):
 		print "======> Baking cookie..."
-		cookie_dir  = app.installAppDir("var/run")
+		cookie_dir  = app.installAppDir("var/run", version=False)
 		if not os.path.isdir(cookie_dir):
 			os.makedirs(cookie_dir)
 		cookie_file = os.path.join(cookie_dir, ".cookie")

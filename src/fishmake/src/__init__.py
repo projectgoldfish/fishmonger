@@ -50,7 +50,7 @@ class AppConfig(PyConfig.Config):
 		return os.path.join(src_dir, dir)
 
 	def installDir(self, dir=""):
-		return os.path.join(self.config["INSTALL_PREFIX"], dir)
+		return PyDir.makeDirAbsolute(os.path.join(self.config["INSTALL_PREFIX"], dir))
 
 	def installAppDir(self, dir="", version=True):
 		install_app_dir = os.path.join(self.installDir(dir), self.name)
@@ -129,10 +129,9 @@ class ToolChain(object):
 		for app in self.apps:
 			app_config = {}
 
-
 			print "====>", app.name
 			if not os.path.isdir(app.buildDir()):
-				os.mkdir(app.buildDir())
+				os.makedirs(app.buildDir())
 			try:
 				cmds = self.buildCommands(app)
 				if not cmds:

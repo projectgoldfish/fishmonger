@@ -14,7 +14,7 @@ clone-libs:
 	@git clone git+ssh://git.rleszilm.com/data/git/pyrcs.git  py-deps/pyrcs
 	@git clone git+ssh://git.rleszilm.com/data/git/pyerl.git  py-deps/pyerl
 
-fishmake-libs:
+fishmake-libs: install-libs
 	@rm -rf py-libs/fishmake
 	@mkdir -p py-libs/fishmake
 	@cp -r src/fishmake/src/* py-libs/fishmake
