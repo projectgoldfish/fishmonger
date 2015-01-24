@@ -5,9 +5,9 @@ import pybase.dir  as PyDir
 import os.path
 import shutil
 
-import fishmake
+import fishmonger
 
-class ToolChain(fishmake.ToolChain):
+class ToolChain(fishmonger.ToolChain):
 	def __init__(self):
 		pass
 

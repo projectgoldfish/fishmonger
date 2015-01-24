@@ -1,10 +1,12 @@
 #! /usr/bin/python
 import os
-import fishmake
+import fishmonger
 import pybase.config as PyConfig
 import pybase.dir    as PyDir
 import pybase.util   as PyUtil
 import pybase.set    as PySet
+
+import pybase.path   as PyPath
 
 import pyrcs         as PyRCS
 
@@ -17,7 +19,7 @@ class FishMake():
 		self.config.merge(sys_config)
 		self.config.merge(cli_config)
 		self.config.merge(config)
-		self.config.merge(PyConfig.FileConfig(".fishmake"))
+		self.config.merge(PyConfig.FileConfig(".fishmonger"))
 
 		self.updated_repos = {}
 
@@ -48,32 +50,33 @@ class FishMake():
 		##        1b1: Checkout/update the dependency
 		## 2: Configure external toolchains.
 		##    2a: Any app that is used by an external toolchain is to not
-		##        be compiled by fishmake.
+		##        be compiled by fishmonger.
 		## 3: Configure apps for tool chains
 		## 4: Determine build order
 		print "Configuring"
 		print "==> Updating codebases"
 		app_dirs = ["."] + [self.retrieveCode(self.config.get("DEP_DIR", "dep"), codebase) for codebase in self.config.get("DEPENDENCIES", [])] + \
 			PyDir.getDirDirs(self.config["SRC_DIR"])
-
+			
 		apps_byName = {}
 		## For each app
 		for app_dir in app_dirs:
 			## Generate config
-			t_appconfig = fishmake.AppConfig(app_dir)
+			t_appconfig = fishmonger.AppConfig(app_dir)
 			apps_byName[t_appconfig.name] = t_appconfig
 
 			## For each dependency
 			dep_dirs = [self.retrieveCode(self.config.get("DEP_DIR", "dep"), codebase) for codebase in t_appconfig.get("DEPENDENCIES", [])] + \
 				PyDir.getDirDirs(os.path.join(app_dir, t_appconfig.config["SRC_DIR"]))
+				
 			for dep_dir in dep_dirs:
 				if dep_dir in app_dirs:
 					continue
 				app_dirs.append(dep_dir)
 
 		## Now that all code is checked out find the lib and include dirs
-		self.config["LIB_DIRS"]     = self.config.getDirs("LIB_DIRS")     + PyDir.findDirsByName("lib")
-		self.config["INCLUDE_DIRS"] = self.config.getDirs("INCLUDE_DIRS") + PyDir.findDirsByName("include")
+		self.config["LIB_DIRS"]     = self.config.getDirs("LIB_DIRS")     + PyDir.getDirs(pattern="*/lib")
+		self.config["INCLUDE_DIRS"] = self.config.getDirs("INCLUDE_DIRS") + PyDir.getDirs(pattern="*/include")
 		
 		app_names     = apps_byName.keys()
 		app_tcs       = {                 ## App Name -> ToolChains used
@@ -83,7 +86,7 @@ class FishMake():
 		tcs_byName    = {}                ## String         -> ToolChain() mapping		
 		t_apps_byName = dict(apps_byName) ## Copy made so we can alter it's state
 		## Configure External ToolChains
-		for ToolChains in [fishmake.ExternalToolChains, fishmake.InternalToolChains]:
+		for ToolChains in [fishmonger.ExternalToolChains, fishmonger.InternalToolChains]:
 			for t_tc in ToolChains:
 				## Generate a tool chain instance.
 				tc         = t_tc.ToolChain()
@@ -102,7 +105,7 @@ class FishMake():
 					for app_name in buildable_apps:
 						## If we're configuring external toolchains then a match
 						## indicats this app should not be available to other toolchains.
-						if ToolChains == fishmake.ExternalToolChains:
+						if ToolChains == fishmonger.ExternalToolChains:
 							del t_apps_byName[app_name]
 
 						## Store this tc in the app -> tc map
@@ -179,8 +182,9 @@ class FishMake():
 
 	def install(self):
 		print "Installing"
-		for nix_dir in fishmake.NIXDirs:
-			tnix_dir = PyDir.makeDirAbsolute(os.path.join(self.config.get("INSTALL_PREFIX", "install"), nix_dir))
+		for nix_dir in fishmonger.NIXDirs:
+			tnix_dir = PyPath.makeAbsolute(os.path.join(self.config.get("INSTALL_PREFIX", "install"), nix_dir))
+			print tnix_dir
 			if not os.path.exists(tnix_dir):
 				os.makedirs(tnix_dir)
 		for tool_chain in self.tool_chains:
@@ -209,9 +213,9 @@ def main():
 		extraToolChains.append(cli[x])
 		x += 1
 
-	fishmake.addInternalToolChains(extraToolChains)
-	fishmake.addInternalToolChains(cli.get("INTERNAL_TOOLS", []))
-	fishmake.addExternalToolChains(cli.get("EXTERNAL_TOOLS", []))
+	fishmonger.addInternalToolChains(extraToolChains)
+	fishmonger.addInternalToolChains(cli.get("INTERNAL_TOOLS", []))
+	fishmonger.addExternalToolChains(cli.get("EXTERNAL_TOOLS", []))
 
 	fish = FishMake(**{"defaults" : defaults})
 	fish.configure()
@@ -226,7 +230,7 @@ def main():
 	elif cli[0] == "test":
 		return 0
 	else:
-		print "Usage: fishmake <clean|build|compile|install|doc> [ToolChain[s]]"
+		print "Usage: fishmonger <clean|build|compile|install|doc> [ToolChain[s]]"
 		return 0
 
 main()

@@ -6,7 +6,7 @@ import pyrcs       as PyRCS
 import os.path
 import shutil
 
-import fishmake
+import fishmonger
 
 class ErlApp(object):
 	def __init__(self, file, app):
@@ -63,7 +63,7 @@ class ErlApp(object):
 		id_tuple.appendChild(id)
 		arg_list.appendChild(id_tuple)
 
-class ToolChain(fishmake.ToolChain):	
+class ToolChain(fishmonger.ToolChain):	
 	## Looks in each app dir for a $APP.app.fish file
 	## uses it to generate a .app
 	def genApp(self, app):
@@ -220,7 +220,7 @@ class ToolChain(fishmake.ToolChain):
 		if os.path.isdir(var_dir):
 			PyDir.copytree(var_dir, install_var_dir, force=True)
 		
-	## What follows is the fishmake language api
+	## What follows is the fishmonger language api
 	## All of the following variables and functions must be made available.
 	
 	## Generate language specific configuration

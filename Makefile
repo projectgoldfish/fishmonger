@@ -1,12 +1,12 @@
-all: fishmake-libs
-	@PYTHONPATH=${PYTHONPATH}:py-libs ./src/fishmake/src/main.py install --SKIP_UPDATE True
+all: fishmonger-libs
+	@PYTHONPATH=${PYTHONPATH}:py-libs ./src/fishmonger/src/main.py install --SKIP_UPDATE True
 
-full: fishmake-libs
-	@PYTHONPATH=${PYTHONPATH}:py-libs ./src/fishmake/src/main.py install
+full: fishmonger-libs
+	@PYTHONPATH=${PYTHONPATH}:py-libs ./src/fishmonger/src/main.py install
 
-init: clone-libs install-libs
+init: clone-libs
 	
-update: update-libs install-libs
+update: update-libs
 
 clone-libs:
 	@mkdir -p py-deps
@@ -14,21 +14,22 @@ clone-libs:
 	@git clone git+ssh://git.rleszilm.com/data/git/pyrcs.git  py-deps/pyrcs
 	@git clone git+ssh://git.rleszilm.com/data/git/pyerl.git  py-deps/pyerl
 
-fishmake-libs: install-libs
-	@rm -rf py-libs/fishmake
-	@mkdir -p py-libs/fishmake
-	@cp -r src/fishmake/src/* py-libs/fishmake
+fishmonger-libs: python-libs
+	@rm -rf py-libs/fishmonger
+	@mkdir -p py-libs/fishmonger
+	@cp -r src/fishmonger/src/* py-libs/fishmonger
 
-install-libs:
+python-libs:
 	@mkdir -p py-libs
 	@mkdir -p py-libs/pybase
-	@mkdir -p py-libs/pyerl
-	@mkdir -p py-libs/pyrcs
 	@cp -r py-deps/pybase/src/* py-libs/pybase
-	@cp -r py-deps/pyerl/src/*  py-libs/pyerl
-	@cp -r py-deps/pyrcs/src/*  py-libs/pyrcs
+	@mkdir -p py-libs/pyerl
+	@cp -r py-deps/pyerl/src/* py-libs/pyerl
+	@mkdir -p py-libs/pyrcs
+	@cp -r py-deps/pyrcs/src/* py-libs/pyrcs
+
 
 update-libs:
-	@cd py-deps/pybase && git pull
-	@cd py-deps/pyerl  && git pull
-	@cd py-deps/pyrcs  && git pull
+	@cd py-libs/pybase && git pull
+	@cd py-libs/pyerl  && git pull
+	@cd py-libs/pyrcs  && git pull

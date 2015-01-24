@@ -1,6 +1,6 @@
-import fishmake
+import fishmonger
 
-class ToolChain(fishmake.ToolChain):
+class ToolChain(fishmonger.ToolChain):
 	def __init__(self):
 		self.extensions = ["c", "cpp"]
 		self.defaults   = {

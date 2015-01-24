@@ -1,13 +1,15 @@
-import fishmake.toolchains
+import fishmonger.toolchains
 
 import os
 import os.path
 
 import pybase.config as PyConfig
+import pybase.path   as PyPath
 import pybase.util   as PyUtil
 import pybase.dir    as PyDir
-import pybase.set    as PySet
 import pyrcs         as PyRCS
+import pybase.set    as PySet
+
 
 class AppConfig(PyConfig.Config):
 	def __init__(self, dir):
@@ -25,7 +27,7 @@ class AppConfig(PyConfig.Config):
 			"INSTALL_PREFIX"    : "install",
 			"SRC_DIR"           : "src"
 		}
-		self.merge(PyConfig.FileConfig(os.path.join(dir, ".fishmake.app")))
+		self.merge(PyConfig.FileConfig(os.path.join(dir, ".fishmonger.app")))
 
 		for (name, url) in self.config["DEPENDENCIES"]:
 			if name not in self.config["BUILD_AFTER_APPS"]:
@@ -101,16 +103,16 @@ class ToolChain(object):
 
 		self.config = PyConfig.Config()
 		self.config.merge(self.defaults)
-		self.config.merge(PyConfig.FileConfig(os.path.join(".", ".fishmake." + self.name)))
+		self.config.merge(PyConfig.FileConfig(os.path.join(".", ".fishmonger." + self.name)))
 
 		app_prerequisites         = {}
 		self.tc_configs_byAppName = {}
 		self.app_configs_byName   = {}
 		for config in app_configs:
-			if PyDir.findFilesByExts(self.extensions, config.srcDir(), root_only=True) != []:
+			if PyDir.findAllByExtensions(self.extensions, config.srcDir(), root_only=True) != []:
 				## Update the tool chain config based on this applications specific toolchain config.
 				self.tc_configs_byAppName[config.name] = self.config.clone()
-				self.tc_configs_byAppName[config.name].merge(PyConfig.FileConfig(os.path.join(config.appDir(), ".fishmake." + self.name)))
+				self.tc_configs_byAppName[config.name].merge(PyConfig.FileConfig(os.path.join(config.appDir(), ".fishmonger." + self.name)))
 
 				self.app_configs_byName[config.name] = config
 
@@ -197,8 +199,8 @@ def addToolChains(array, target="InternalToolChains", prefix=""):
 InternalToolChains = []
 ExternalToolChains = []
 
-addToolChains(fishmake.toolchains.internal(), InternalToolChains, "fishmake.toolchains");
-addToolChains(fishmake.toolchains.external(), ExternalToolChains, "fishmake.toolchains");
+addToolChains(fishmonger.toolchains.internal(), InternalToolChains, "fishmonger.toolchains");
+addToolChains(fishmonger.toolchains.external(), ExternalToolChains, "fishmonger.toolchains");
 
 ## Directories that a built app should contain.
 NIXDirs  = ["bin", "doc", "etc", "lib", "sbin", "var", "var/log", "var/run"]

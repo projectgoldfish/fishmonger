@@ -1,5 +1,4 @@
 *.pyc
-py-deps/*
 py-libs/*
 install/*
 dep/*

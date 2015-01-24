@@ -5,9 +5,9 @@ import pybase.dir  as PyDir
 import os.path
 import shutil
 
-import fishmake
+import fishmonger
 
-class ToolChain(fishmake.ToolChain):
+class ToolChain(fishmonger.ToolChain):
 	## Generate language specific configuration
 	## Return True if we are used, false if not
 

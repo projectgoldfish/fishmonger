@@ -3,9 +3,9 @@ import pybase.util as PyUtil
 import pybase.dir as PyDir
 import os.path
 
-import fishmake
+import fishmonger
 
-class ToolChain(fishmake.ToolChain):
+class ToolChain(fishmonger.ToolChain):
 	def __init__(self):
 		self.defaults   = {
 			"BUILD_DIR" : "js"
