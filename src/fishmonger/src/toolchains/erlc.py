@@ -253,7 +253,6 @@ class ToolChain(fishmonger.ToolChain):
 			if not os.path.isdir(app.appDir(dir)):
 				continue
 			install_target = os.path.join(install_erl_dir, dir)
-			print app.appDir(dir), install_target
 			PySH.copy(app.appDir(dir), install_target, force=True)
 
 		self.installMisc(app)
