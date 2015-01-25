@@ -1,9 +1,9 @@
-import pybase.config
-import pybase.util as PyUtil
-import pybase.dir as PyDir
 import os.path
 
-import re
+import pybase.config
+import pybase.file as PyFile
+import pybase.path as PyPath
+import pybase.sh   as PySH
 
 import fishmonger
 
@@ -31,20 +31,20 @@ class ToolChain(fishmonger.ToolChain):
 		pass
 
 	def installApplication(self, py_main, app):
-		py_lib    = PyDir.makeDirAbsolute(app.installDir("lib/python/lib"))
-		py_main   = PyDir.makeDirAbsolute(os.path.join(app.installAppDir("lib/python/lib", version=False), py_main))
+		py_lib    = PyPath.makeAbsolute(app.installDir("lib/python/lib"))
+		py_main   = PyPath.makeAbsolute(os.path.join(app.installAppDir("lib/python/lib", version=False), py_main))
 
 		app_code  = "#! /bin/bash\n"
 		app_code += "PYTHONPATH=${PYTHONPATH}:%s python %s $@" % (py_lib, py_main)
 
 		file_name = app.installAppDir("bin", version=False)
-		file      = open(file_name, "w")
+		file      = PyFile.file(file_name, "w")
 		file.write(app_code)
 		file.close()
 
-		PyUtil.shell("chmod a+x %s" % file_name)
+		PySH.cmd("chmod a+x %s" % file_name)
 
 	def installLibrary(self, app):
 		install_dir = app.installAppDir("lib/python/lib", version=False)
-		PyDir.copytree(app.srcDir(), install_dir, pattern="^(.*)\.py$", force=True)
+		PySH.copy(app.srcDir(), install_dir, pattern="*.py", force=True)
 		

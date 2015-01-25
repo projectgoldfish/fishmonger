@@ -6,7 +6,7 @@ import os.path
 import pybase.config as PyConfig
 import pybase.path   as PyPath
 import pybase.util   as PyUtil
-import pybase.dir    as PyDir
+import pybase.find   as PyFind
 import pyrcs         as PyRCS
 import pybase.set    as PySet
 
@@ -52,7 +52,7 @@ class AppConfig(PyConfig.Config):
 		return os.path.join(src_dir, dir)
 
 	def installDir(self, dir=""):
-		return PyDir.makeDirAbsolute(os.path.join(self.config["INSTALL_PREFIX"], dir))
+		return PyPath.makeAbsolute(os.path.join(self.config["INSTALL_PREFIX"], dir))
 
 	def installAppDir(self, dir="", version=True):
 		install_app_dir = os.path.join(self.installDir(dir), self.name)
@@ -109,7 +109,7 @@ class ToolChain(object):
 		self.tc_configs_byAppName = {}
 		self.app_configs_byName   = {}
 		for config in app_configs:
-			if PyDir.findAllByExtensions(self.extensions, config.srcDir(), root_only=True) != []:
+			if PyFind.findAllByExtensions(self.extensions, config.srcDir(), root_only=True) != []:
 				## Update the tool chain config based on this applications specific toolchain config.
 				self.tc_configs_byAppName[config.name] = self.config.clone()
 				self.tc_configs_byAppName[config.name].merge(PyConfig.FileConfig(os.path.join(config.appDir(), ".fishmonger." + self.name)))

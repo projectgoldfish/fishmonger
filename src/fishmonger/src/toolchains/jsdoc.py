@@ -1,7 +1,7 @@
 import pybase.config
 import pyerl       as PyErl
 import pybase.util as PyUtil
-import pybase.dir  as PyDir
+import pybase.find as PyFind
 import os.path
 import shutil
 
@@ -31,7 +31,7 @@ class ToolChain(fishmonger.ToolChain):
 			os.makedirs(doc_dir)
 
 		target_files = ""
-		for js_file in PyDir.findFilesByExts(["js"], app.buildDir()):
+		for js_file in PyFind.findFilesByExts(["js"], app.buildDir()):
 			target_file = os.path.join(app.buildDir(), js_file)
 			target_files += target_file + " "
 

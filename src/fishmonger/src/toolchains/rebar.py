@@ -1,7 +1,7 @@
 import pybase.config
 import pyerl       as PyErl
 import pybase.util as PyUtil
-import pybase.dir  as PyDir
+import pybase.find as PyFind
 import os.path
 import shutil
 
@@ -30,7 +30,7 @@ class ToolChain(fishmonger.ToolChain):
 		for app in self.apps:
 			PyUtil.shell("cd " + app.appDir() + " && rebar doc")
 			doc_dir = app.installDocDir("erlang")
-			PyDir.copytree(os.path.join(app.appDir(), "doc"), doc_dir, force=True)
+			PyFind.copytree(os.path.join(app.appDir(), "doc"), doc_dir, force=True)
 
 	def install(self):
 		for app in self.apps:
@@ -39,4 +39,4 @@ class ToolChain(fishmonger.ToolChain):
 				install_source = os.path.join(app.appDir(), dir)
 				install_target = os.path.join(install_erl_dir, dir)
 				if os.path.isdir(install_source):
-					PyDir.copytree(install_source, install_target, force=True)
+					PyFind.copytree(install_source, install_target, force=True)

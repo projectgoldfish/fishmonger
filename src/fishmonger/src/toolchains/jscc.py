@@ -1,6 +1,6 @@
 import pybase.config
 import pybase.util as PyUtil
-import pybase.dir as PyDir
+import pybase.find as PyFind
 import os.path
 
 import fishmonger
@@ -20,7 +20,7 @@ class ToolChain(fishmonger.ToolChain):
 			includes += ":" + include
 
 		cmds = []
-		for js_file in PyDir.findFilesByExts(["js"], app.srcDir()):
+		for js_file in PyFind.findFilesByExts(["js"], app.srcDir()):
 			target_file = os.path.join(app.buildDir(), js_file)
 			cmds.append("JSCC_INCLUDE_DIRS=" + includes + " jscc " + os.path.join(app.srcDir(), js_file) +  " > " + target_file)
 		return cmds
@@ -30,7 +30,7 @@ class ToolChain(fishmonger.ToolChain):
 			app_install_dir = os.path.join(app.config["INSTALL_PREFIX"], "var/www/js/" + app.name)
 			if not os.path.isdir(app_install_dir):
 				os.makedirs(app_install_dir)
-			PyDir.copytree(app.buildDir(), app_install_dir, force=True)
+			PyFind.copytree(app.buildDir(), app_install_dir, force=True)
 
 	def doc(self):
 		pass

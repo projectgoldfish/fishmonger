@@ -1,7 +1,6 @@
 import pybase.config
 import pyerl       as PyErl
 import pybase.util as PyUtil
-import pybase.dir  as PyDir
 import os.path
 import shutil
 

@@ -2,7 +2,7 @@
 import os
 import fishmonger
 import pybase.config as PyConfig
-import pybase.dir    as PyDir
+import pybase.find   as PyFind
 import pybase.util   as PyUtil
 import pybase.set    as PySet
 
@@ -10,7 +10,7 @@ import pybase.path   as PyPath
 
 import pyrcs         as PyRCS
 
-class FishMake():
+class FishMonger():
 	def __init__(self, config={}, defaults={}):
 		cli_config  = PyConfig.CLIConfig()
 		sys_config  = PyConfig.SysConfig()
@@ -56,7 +56,7 @@ class FishMake():
 		print "Configuring"
 		print "==> Updating codebases"
 		app_dirs = ["."] + [self.retrieveCode(self.config.get("DEP_DIR", "dep"), codebase) for codebase in self.config.get("DEPENDENCIES", [])] + \
-			PyDir.getDirDirs(self.config["SRC_DIR"])
+			PyFind.getDirDirs(self.config["SRC_DIR"])
 			
 		apps_byName = {}
 		## For each app
@@ -67,7 +67,7 @@ class FishMake():
 
 			## For each dependency
 			dep_dirs = [self.retrieveCode(self.config.get("DEP_DIR", "dep"), codebase) for codebase in t_appconfig.get("DEPENDENCIES", [])] + \
-				PyDir.getDirDirs(os.path.join(app_dir, t_appconfig.config["SRC_DIR"]))
+				PyFind.getDirDirs(os.path.join(app_dir, t_appconfig.config["SRC_DIR"]))
 				
 			for dep_dir in dep_dirs:
 				if dep_dir in app_dirs:
@@ -75,8 +75,8 @@ class FishMake():
 				app_dirs.append(dep_dir)
 
 		## Now that all code is checked out find the lib and include dirs
-		self.config["LIB_DIRS"]     = self.config.getDirs("LIB_DIRS")     + PyDir.getDirs(pattern="*/lib")
-		self.config["INCLUDE_DIRS"] = self.config.getDirs("INCLUDE_DIRS") + PyDir.getDirs(pattern="*/include")
+		self.config["LIB_DIRS"]     = self.config.getDirs("LIB_DIRS")     + PyFind.getDirs(pattern="*/lib")
+		self.config["INCLUDE_DIRS"] = self.config.getDirs("INCLUDE_DIRS") + PyFind.getDirs(pattern="*/include")
 		
 		app_names     = apps_byName.keys()
 		app_tcs       = {                 ## App Name -> ToolChains used
@@ -182,11 +182,6 @@ class FishMake():
 
 	def install(self):
 		print "Installing"
-		for nix_dir in fishmonger.NIXDirs:
-			tnix_dir = PyPath.makeAbsolute(os.path.join(self.config.get("INSTALL_PREFIX", "install"), nix_dir))
-			print tnix_dir
-			if not os.path.exists(tnix_dir):
-				os.makedirs(tnix_dir)
 		for tool_chain in self.tool_chains:
 			print "==>", tool_chain.name
 			tool_chain.install()
@@ -217,7 +212,7 @@ def main():
 	fishmonger.addInternalToolChains(cli.get("INTERNAL_TOOLS", []))
 	fishmonger.addExternalToolChains(cli.get("EXTERNAL_TOOLS", []))
 
-	fish = FishMake(**{"defaults" : defaults})
+	fish = FishMonger(**{"defaults" : defaults})
 	fish.configure()
 	if   cli[0] == "clean":
 		return fish.clean()

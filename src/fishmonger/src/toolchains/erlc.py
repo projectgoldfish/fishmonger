@@ -1,7 +1,7 @@
 import pybase.config
 import pyerl       as PyErl
 import pybase.util as PyUtil
-import pybase.dir  as PyDir
+import pybase.find as PyFind
 import pyrcs       as PyRCS
 import os.path
 import shutil
@@ -27,7 +27,7 @@ class ErlApp(object):
 
 		modules_tuple = PyErl.term("{modules, []}.")
 
-		for mod in PyDir.findFilesByExts(["erl"], self.app.appDir()):
+		for mod in PyFind.findFilesByExts(["erl"], self.app.appDir()):
 			(mod, x) = os.path.splitext(mod)
 			modules_tuple[1].appendChild(PyErl.PyErlString(mod))
 		arg_list.appendChild(modules_tuple)
@@ -85,11 +85,11 @@ class ToolChain(fishmonger.ToolChain):
 	def getApps(self, app):
 		apps = []
 		
-		app_file = PyDir.find(app + ".app", self.config["INSTALL_PREFIX"])
+		app_file = PyFind.find(app + ".app", self.config["INSTALL_PREFIX"])
 		if not app_file:
-			app_file = PyDir.find(app + ".app", "/usr/lib/erlang") ## Search in a nix install
+			app_file = PyFind.find(app + ".app", "/usr/lib/erlang") ## Search in a nix install
 			if not app_file:
-				app_file = PyDir.find(app + ".app", "/usr/local/lib/erlang") ## Search in an OSX install
+				app_file = PyFind.find(app + ".app", "/usr/local/lib/erlang") ## Search in an OSX install
 				if not app_file:
 					return [app]
 
@@ -218,7 +218,7 @@ class ToolChain(fishmonger.ToolChain):
 		install_var_dir = app.installDir("var")
 		print "======> Copying content..."
 		if os.path.isdir(var_dir):
-			PyDir.copytree(var_dir, install_var_dir, force=True)
+			PyFind.copytree(var_dir, install_var_dir, force=True)
 		
 	## What follows is the fishmonger language api
 	## All of the following variables and functions must be made available.
@@ -251,7 +251,7 @@ class ToolChain(fishmonger.ToolChain):
 			if not os.path.isdir(app.appDir(dir)):
 				continue
 			install_target = os.path.join(install_erl_dir, dir)
-			PyDir.copytree(app.appDir(dir), install_target, force=True)
+			PyFind.copytree(app.appDir(dir), install_target, force=True)
 
 		self.installMisc(app)
 
