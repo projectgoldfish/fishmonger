@@ -9,6 +9,7 @@ import pybase.util   as PyUtil
 import pybase.find   as PyFind
 import pyrcs         as PyRCS
 import pybase.set    as PySet
+import pybase.sh     as PySH
 
 
 class AppConfig(PyConfig.Config):
@@ -142,7 +143,7 @@ class ToolChain(object):
 					if hasattr(cmd, "__call__"):
 						cmd(app)
 					elif isinstance(cmd, basestring):
-						if PyUtil.shell(cmd, prefix="======>", stdout=True, stderr=True) != 0:
+						if PySH.cmd(cmd, prefix="======>", stdout=True, stderr=True) != 0:
 							raise Exception("Failure compiling %s during: %s" % (app, cmd))
 					else:
 						raise Exception("Invalid build cmd. Cmds must be string or fun: %s : %s" % (app, cmd))

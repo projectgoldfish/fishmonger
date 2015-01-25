@@ -4,6 +4,9 @@ all: fishmonger-libs
 full: fishmonger-libs
 	@PYTHONPATH=${PYTHONPATH}:py-libs ./src/fishmonger/src/main.py install
 
+install: fishmonger-libs
+	@PYTHONPATH=${PYTHONPATH}:py-libs ./src/fishmonger/src/main.py install --INSTALL_PREFIX /usr/local/share/fishmonger	
+
 init: clone-libs
 	
 update: update-libs

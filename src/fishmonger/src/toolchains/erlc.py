@@ -3,6 +3,8 @@ import pyerl       as PyErl
 import pybase.util as PyUtil
 import pybase.find as PyFind
 import pyrcs       as PyRCS
+import pybase.file as PyFile
+import pybase.sh   as PySH
 import os.path
 import shutil
 
@@ -130,12 +132,12 @@ class ToolChain(fishmonger.ToolChain):
 		erl_dirs    = app.installDir("lib/erlang/lib/")
 		config_file = os.path.join(app.installDir("etc"), app_name + ".config")
 
-		file        = open(file_name, "w")
+		file        = PyFile.file(file_name, "w")
 		file.write("#! /bin/bash\n")
 		file.write("export ERL_LIBS=${ERL_LIBS}:" + erl_dirs + "\n")
 		file.write("erl  -name " + app_name +  "@`hostname -f` -setcookie \"`cat " + cookie_file + "`\" -config " + config_file +  " " + start_apps)
 		file.close()
-		PyUtil.shell("chmod a+x " + file_name)
+		PySH.cmd("chmod a+x " + file_name)
 
 	def genShellConnectScript(self, app):
 		app_name    = app.name
@@ -145,12 +147,12 @@ class ToolChain(fishmonger.ToolChain):
 		file_name   = os.path.join(app.installDir("bin"),     app_name + "-connect")
 		erl_dirs    = app.installDir("lib/erlang/lib/")
 
-		file        = open(file_name, "w")
+		file        = PyFile.file(file_name, "w")
 		file.write("#! /bin/bash\n")
 		file.write("export ERL_LIBS=${ERL_LIBS}:" + erl_dirs + "\n")
 		file.write("erl -remsh " + app_name + "@`hostname -f` -name " + app_name + "-shell-$$ -setcookie \"`cat " + cookie_file + "`\"")
 		file.close()
-		PyUtil.shell("chmod a+x " + file_name)
+		PySH.cmd("chmod a+x " + file_name)
 
 	def genShellEnvScript(self, app):
 		app_name    = app.name
@@ -161,12 +163,12 @@ class ToolChain(fishmonger.ToolChain):
 		erl_dirs    = app.installDir("lib/erlang/lib/")
 		config_file = os.path.join(app.installDir("etc"), app_name + ".config")
 
-		file        = open(file_name, "w")
+		file        = PyFile.file(file_name, "w")
 		file.write("#! /bin/bash\n")
 		file.write("export ERL_LIBS=${ERL_LIBS}:" + erl_dirs + "\n")
 		file.write("erl -name " + app_name + "-shell-$$ -setcookie \"`cat " + cookie_file + "`\" -config " + config_file)
 		file.close()
-		PyUtil.shell("chmod a+x " + file_name)
+		PySH.cmd("chmod a+x " + file_name)
 
 	## gen_cookie(dict()) -> None
 	## Generates the cookie file
@@ -187,12 +189,12 @@ class ToolChain(fishmonger.ToolChain):
 		else:
 			cookie = "cookie_flavor-" + PyRCS.getVersion() + "-" + PyRCS.getId()
 
-		file = open(cookie_file, "w")
+		file = PyFile.file(cookie_file, "w")
 		file.write(cookie)
 		file.close()
-		PyUtil.shell("chmod a-x "  + cookie_file)
-		PyUtil.shell("chmod a-w "  + cookie_file)
-		PyUtil.shell("chmod og-r " + cookie_file)
+		PySH.cmd("chmod a-x "  + cookie_file)
+		PySH.cmd("chmod a-w "  + cookie_file)
+		PySH.cmd("chmod og-r " + cookie_file)
 
 	def genConfigFile(self, app):
 		doc         = PyErl.PyErlDocument()
@@ -218,7 +220,7 @@ class ToolChain(fishmonger.ToolChain):
 		install_var_dir = app.installDir("var")
 		print "======> Copying content..."
 		if os.path.isdir(var_dir):
-			PyFind.copytree(var_dir, install_var_dir, force=True)
+			PySH.copy(var_dir, install_var_dir, force=True)
 		
 	## What follows is the fishmonger language api
 	## All of the following variables and functions must be made available.
@@ -251,7 +253,8 @@ class ToolChain(fishmonger.ToolChain):
 			if not os.path.isdir(app.appDir(dir)):
 				continue
 			install_target = os.path.join(install_erl_dir, dir)
-			PyFind.copytree(app.appDir(dir), install_target, force=True)
+			print app.appDir(dir), install_target
+			PySH.copy(app.appDir(dir), install_target, force=True)
 
 		self.installMisc(app)
 
