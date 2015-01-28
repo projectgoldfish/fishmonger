@@ -38,10 +38,13 @@ class FishMonger():
 					PyRCS.update(target_dir)
 		return target_dir
 
+	def clean(self, ToolChain):
+		pass
+
 	## We have to detect the applicaiton folders and generate base app
 	## configurations here. Caling doConfigure will fill in the blanks.
 	## Once we do that we can setup the tool chains
-	def configure(self):
+	def configure(self, ToolChains):
 		## 0: For each src app
 		##    0a: Checkout/update the src
 		## 1: For each app
@@ -53,6 +56,10 @@ class FishMonger():
 		##        be compiled by fishmonger.
 		## 3: Configure apps for tool chains
 		## 4: Determine build order
+
+		## Clear out toolchains.
+		self.tool_chains = [];
+
 		print "Configuring"
 		print "==> Updating codebases"
 		app_dirs = ["."] + [self.retrieveCode(self.config.get("DEP_DIR", "dep"), codebase) for codebase in self.config.get("DEPENDENCIES", [])] + \
@@ -67,7 +74,7 @@ class FishMonger():
 
 			## For each dependency
 			dep_dirs = [self.retrieveCode(self.config.get("DEP_DIR", "dep"), codebase) for codebase in t_appconfig.get("DEPENDENCIES", [])] + \
-				PyFind.getDirDirs(os.path.join(app_dir, t_appconfig.config["SRC_DIR"]))
+				PyFind.getDirDirs(os.path.join(app_dir, t_appconfig["SRC_DIR"]))
 				
 			for dep_dir in dep_dirs:
 				if dep_dir in app_dirs:
@@ -86,30 +93,29 @@ class FishMonger():
 		tcs_byName    = {}                ## String         -> ToolChain() mapping		
 		t_apps_byName = dict(apps_byName) ## Copy made so we can alter it's state
 		## Configure External ToolChains
-		for ToolChains in [fishmonger.ExternalToolChains, fishmonger.InternalToolChains]:
-			for t_tc in ToolChains:
-				## Generate a tool chain instance.
-				tc         = t_tc.ToolChain()
-				tc_name    = tc.getName()
-				## Get the list of apps this toolchain can build
-				buildable_apps = tc.configure(self.config, t_apps_byName.values())
+		for t_tc in ToolChains:
+			## Generate a tool chain instance.
+			tc         = t_tc.ToolChain()
+			tc_name    = tc.getName()
+			## Get the list of apps this toolchain can build
+			buildable_apps = tc.configure(self.config, t_apps_byName.values())
 
-				## If the toolchain builds any apps
-				if isinstance(buildable_apps, list) and buildable_apps != []:
-					## Add it to the list of usable toolchains
-					tcs_byName[tc_name] = tc
-					
-					## Store the apps this toolchain builds
-					tc_apps[tc_name]    = buildable_apps
+			## If the toolchain builds any apps
+			if isinstance(buildable_apps, list) and buildable_apps != []:
+				## Add it to the list of usable toolchains
+				tcs_byName[tc_name] = tc
+				
+				## Store the apps this toolchain builds
+				tc_apps[tc_name]    = buildable_apps
 
-					for app_name in buildable_apps:
-						## If we're configuring external toolchains then a match
-						## indicats this app should not be available to other toolchains.
-						if ToolChains == fishmonger.ExternalToolChains:
-							del t_apps_byName[app_name]
+				for app_name in buildable_apps:
+					## If we're configuring external toolchains then a match
+					## indicats this app should not be available to other toolchains.
+					if ToolChains == fishmonger.ExternalToolChains:
+						del t_apps_byName[app_name]
 
-						## Store this tc in the app -> tc map
-						app_tcs[app_name].add(tc_name)
+					## Store this tc in the app -> tc map
+					app_tcs[app_name].add(tc_name)
 		
 		## We need to determine build order for tool chains.
 		## Mapping toolchain -> prerequisite toolchains
@@ -192,6 +198,24 @@ class FishMonger():
 			print "==>", tool_chain.name
 			tool_chain.doc()
 
+	def clean(self):
+		print "Cleaning"
+		for tool_chain in self.tool_chains:
+			print "==>", tool_chain.name
+			tool_chain.clean()
+
+	def generate(self):
+		print "Generating"
+		for tool_chain in self.tool_chains:
+			print "==>", tool_chain.name
+			tool_chain.generate()
+
+	def link(self):
+		print "Linking"
+		for tool_chain in self.tool_chains:
+			print "==>", tool_chain.name
+			tool_chain.link()
+
 def main():
 	cli = PyConfig.CLIConfig()
 
@@ -209,21 +233,27 @@ def main():
 		x += 1
 
 	fishmonger.addInternalToolChains(extraToolChains)
-	fishmonger.addInternalToolChains(cli.get("INTERNAL_TOOLS", []))
-	fishmonger.addExternalToolChains(cli.get("EXTERNAL_TOOLS", []))
+	fishmonger.addInternalToolChains(cli.get("INTERNAL_TOOL", []))
+	fishmonger.addExternalToolChains(cli.get("EXTERNAL_TOOL", []))
 
-	fish = FishMonger(**{"defaults" : defaults})
-	fish.configure()
-	if   cli[0] == "clean":
-		return fish.clean()
-	elif cli[0] == "build" or cli[0] == "compile":
-		return fish.build()
-	elif cli[0] == "install":
-		return fish.install()
-	elif cli[0] == "doc":
-		return fish.doc()
-	elif cli[0] == "test":
-		return 0
+	fish    = FishMonger(**{"defaults" : defaults})
+
+	actions = {}
+	actions["clean"]    = [(fish.clean,    [])]
+
+	actions["build"]    = [(fish.generate, []), (fish.build, []), (fish.link, [])]
+	actions["compile"]  = actions["build"]
+
+	actions["install"]  = [(fish.install,  [])]
+	actions["doc"]      = [(fish.doc,      [])]
+	actions["test"]     = [(None,          [])]
+
+	
+	if cli[0] in actions:
+		tasks = actions[cli[0]]
+		for (task, tools) in tasks:
+			fish.configure(tools)
+			task()
 	else:
 		print "Usage: fishmonger <clean|build|compile|install|doc> [ToolChain[s]]"
 		return 0

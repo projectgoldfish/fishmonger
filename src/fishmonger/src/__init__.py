@@ -20,7 +20,7 @@ class AppConfig(PyConfig.Config):
 		else:
 			self.name = os.path.basename(dir)
 
-		self.config   = {
+		self.defaults = {
 			"BUILD_AFTER_APPS"  : [],
 			"BUILD_DIR"         : "build",
 			"DEPENDENCIES"      : [],
@@ -28,11 +28,18 @@ class AppConfig(PyConfig.Config):
 			"INSTALL_PREFIX"    : "install",
 			"SRC_DIR"           : "src"
 		}
+
+		self.constants = [
+			"INSTALL_PREFIX"
+		]
+
+		self.config = {}
+
 		self.merge(PyConfig.FileConfig(os.path.join(dir, ".fishmonger.app")))
 
-		for (name, url) in self.config["DEPENDENCIES"]:
-			if name not in self.config["BUILD_AFTER_APPS"]:
-				self.config["BUILD_AFTER_APPS"].append(name)
+		for (name, url) in self.get("DEPENDENCIES"):
+			if name not in self.get("BUILD_AFTER_APPS"):
+				self.get("BUILD_AFTER_APPS").append(name)
 
 	def appDir(self, dir=""):
 		if dir == "":
@@ -41,19 +48,19 @@ class AppConfig(PyConfig.Config):
 			return os.path.join(self.dir, dir)
 
 	def buildDir(self, dir=""):
-		build_dir = os.path.join(self.dir, self.config["BUILD_DIR"])
+		build_dir = os.path.join(self.dir, self.get("BUILD_DIR"))
 		return os.path.join(build_dir, dir)
 
 	def docDir(self, dir=""):
-		doc_dir = os.path.join(self.dir, self.config["DOC_DIR"])
+		doc_dir = os.path.join(self.dir, self.get("DOC_DIR"))
 		return os.path.join(doc_dir, dir)
 
 	def srcDir(self, dir=""):
-		src_dir = os.path.join(self.dir, self.config["SRC_DIR"])
+		src_dir = os.path.join(self.dir, self.get("SRC_DIR"))
 		return os.path.join(src_dir, dir)
 
 	def installDir(self, dir=""):
-		return PyPath.makeAbsolute(os.path.join(self.config["INSTALL_PREFIX"], dir))
+		return PyPath.makeAbsolute(os.path.join(self.get("INSTALL_PREFIX"), dir))
 
 	def installAppDir(self, dir="", version=True):
 		install_app_dir = os.path.join(self.installDir(dir), self.name)
@@ -71,21 +78,19 @@ class AppConfig(PyConfig.Config):
 			return os.path.join(doc_dir, self.name)
 
 	def prerequisiteApps(self):
-		return self.config["BUILD_AFTER_APPS"]
+		return self.get("BUILD_AFTER_APPS")
+
+class ToolChainException(Exception):
+	def __init__(self, value):
+		self.value = value
+	
+	def __str__(self):
+		return repr(self.value)
 
 class ToolChain(object):
 	## Functions that MUST be implemented
 	def __init__(self):
-		raise Exception("%s MUST implement init!" % self.__class__)
-
-	def buildCommands(self, app):
-		raise Exception("%s MUST implement buildCommands or override build!" % self.__class__)
-
-	def installApp(self, app):
-		raise Exception("%s MUST implement installApp or override install!" % self.__class__)
-
-	def installDoc(self, app):
-		raise Exception("%s MUST implement installDoc or override doc!" % self.__class__)
+		raise ToolChainException("%s MUST implement init!" % self.__class__)
 
 	## Functions that MAY be implemented, but have default behavior that should be good enough.
 	def configure(self, fish_config, app_configs):
@@ -96,14 +101,13 @@ class ToolChain(object):
 			self.defaults = {}
 
 		if not hasattr(self, "extensions"):
-			raise Exception("%s MUST define a list of extensions during __init__!" % self.__class__)
+			raise ToolChainException("%s MUST define a list of extensions during __init__!" % self.__class__)
 		elif not isinstance(self.extensions, list):
-			raise Exception("%s MUST define a list of extensions during __init__!" % self.__class__)
+			raise ToolChainException("%s MUST define a list of extensions during __init__!" % self.__class__)
 
 		self.base_config = fish_config
 
-		self.config = PyConfig.Config()
-		self.config.merge(self.defaults)
+		self.config = PyConfig.Config(defaults=self.defaults)
 		self.config.merge(PyConfig.FileConfig(os.path.join(".", ".fishmonger." + self.name)))
 
 		app_prerequisites         = {}
@@ -128,7 +132,7 @@ class ToolChain(object):
 		## Return the list of apps used
 		return self.app_configs_byName.keys()
 
-	def build(self):
+	def runAction(self, action, function):
 		for app in self.apps:
 			app_config = {}
 
@@ -136,7 +140,7 @@ class ToolChain(object):
 			if not os.path.isdir(app.buildDir()):
 				os.makedirs(app.buildDir())
 			try:
-				cmds = self.buildCommands(app)
+				cmds = function(app)
 				if not cmds:
 					continue
 				for cmd in cmds:
@@ -144,24 +148,34 @@ class ToolChain(object):
 						cmd(app)
 					elif isinstance(cmd, basestring):
 						if PySH.cmd(cmd, prefix="======>", stdout=True, stderr=True) != 0:
-							raise Exception("Failure compiling %s during: %s" % (app, cmd))
+							raise ToolChainException("Failure in %s:%s during: %s" % (action, app, cmd))
 					else:
-						raise Exception("Invalid build cmd. Cmds must be string or fun: %s : %s" % (app, cmd))
+						raise ToolChainException("Invalid %s cmd. Cmds must be string or fun: %s : %s" % (action, app, cmd))
 
 			except Exception as e:
-				print "======> Error compiling:", e
+				print "======> Error during", action, "-", e
 				return False
-		return True		
-		
-	def install(self):
-		for app in self.apps:
-			print "====>", app.name
-			self.installApp(app)
+		return True
 
-	def doc(self):
-		for app in self.apps:
-			print "====>", app.name
-			self.installDoc(app)
+	## Build runs the commands that each app says to use.
+	def build(self):
+		return self.funAction("build", self.buildApp)
+
+	## buildApp is to return a list of strings and functions to call to build the app.
+	def buildApp(self, app):
+		raise ToolChainException("%s MUST implement buildApp or override build!" % self.__class__)
+
+	def install(self):
+		return self.funAction("install", self.installApp)
+
+	def installApp(self, app):
+		raise ToolChainException("%s MUST implement installApp or override install!" % self.__class__)
+
+	def document(self):
+		return self.funAction("document", self.documentApp)
+
+	def documentApp(self, app):
+		raise ToolChainException("%s MUST implement installDoc or override doc!" % self.__class__)
 
 	def prerequisiteTools(self):
 		## Get the toolchains for the apps, then merge
@@ -182,11 +196,12 @@ class ToolChain(object):
 			self.name   = self.__module__.split(".")[-1:][0]
 		return self.name;
 
-def addInternalToolChains(array):
-	addToolChains(array, InternalToolChains)
+InternalToolChains   = PySet.Set()
+ExternalToolChains   = PySet.Set()
 
-def addExternalToolChains(array):
-	addToolChains(array, ExternalToolChains)	
+GenerationToolChains = PySet.Set()
+BuildToolChains      = PySet.Set()
+LinkToolChains       = PySet.Set()
 
 def addToolChains(array, target="InternalToolChains", prefix=""):
 	if prefix != "":
@@ -197,15 +212,32 @@ def addToolChains(array, target="InternalToolChains", prefix=""):
 		modules.append(prefix + c)
 	PyUtil.loadModules(modules, target)
 
-InternalToolChains = []
-ExternalToolChains = []
+def addInternalToolChains(array):
+	addToolChains(array, InternalToolChains)
+	addToolChains(array, GenerationToolChains)
+	addToolChains(array, BuildToolChains)
+	addToolChains(array, LinkToolChains)
+
+def addExternalToolChains(array):
+	addToolChains(array, ExternalToolChains)
+	addToolChains(array, GenerationToolChains)
+	addToolChains(array, BuildToolChains)
+	addToolChains(array, LinkToolChains)
+
+def addGenerationToolChains(array):
+	addToolChains(array, ExternalToolChains)
+	addToolChains(array, GenerationToolChains)
+
+def addBuildToolChains(array):
+	addToolChains(array, ExternalToolChains)
+	addToolChains(array, BuildToolChains)
+
+def addLinkToolChains(array):
+	addToolChains(array, ExternalToolChains)
+	addToolChains(array, LinkToolChains)
 
 addToolChains(fishmonger.toolchains.internal(), InternalToolChains, "fishmonger.toolchains");
 addToolChains(fishmonger.toolchains.external(), ExternalToolChains, "fishmonger.toolchains");
-
-## Directories that a built app should contain.
-NIXDirs  = ["bin", "doc", "etc", "lib", "sbin", "var", "var/log", "var/run"]
-
 
 
 
