@@ -1,4 +1,4 @@
-INSTALL_PREFIX=/usr/local/share/fishmonger
+INSTALL_PREFIX=install
 
 all: fishmonger-libs
 	@PYTHONPATH=${PYTHONPATH}:py-libs ./src/fishmonger/src/main.py install --SKIP_UPDATE True

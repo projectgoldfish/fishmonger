@@ -23,7 +23,7 @@ class ToolChain(fishmonger.ToolChain):
 	def install(self):
 		pass
 
-	def installDoc(self, app):
+	def documentApp(self, app):
 		doc_dir = app.installDocDir("js")
 
 		if os.path.isdir(doc_dir):

@@ -12,7 +12,7 @@ class ToolChain(fishmonger.ToolChain):
 		}
 		self.extensions = ["js"]
 	
-	def buildCommands(self, app):
+	def buildApp(self, app):
 		includes = ".:${JSCC_INCLUDE_DIRS}"
 		for include in app["INCLUDE_DIRS"]:
 			if include == "":
@@ -32,7 +32,7 @@ class ToolChain(fishmonger.ToolChain):
 				os.makedirs(app_install_dir)
 			PySH.copy(app.buildDir(), app_install_dir, force=True)
 
-	def doc(self):
+	def document(self):
 		pass
 
 

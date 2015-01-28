@@ -16,7 +16,7 @@ class ToolChain(fishmonger.ToolChain):
 	def install(self):
 		pass
 
-	def installDoc(self, app):
+	def documentApp(self, app):
 		doc_dir = app.installDocDir("erlang")
 		if os.path.isdir(doc_dir):
 			shutil.rmtree(doc_dir)

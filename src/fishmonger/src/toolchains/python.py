@@ -18,6 +18,12 @@ class ToolChain(fishmonger.ToolChain):
 	def build(self):
 		pass
 
+	def link(self):
+		pass
+
+	def generate(self):
+		pass
+
 	## 
 	def installApp(self, app):
 		self.installLibrary(app)

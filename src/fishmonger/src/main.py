@@ -44,7 +44,7 @@ class FishMonger():
 	## We have to detect the applicaiton folders and generate base app
 	## configurations here. Caling doConfigure will fill in the blanks.
 	## Once we do that we can setup the tool chains
-	def configure(self, ToolChains):
+	def configure(self, action, ToolChains):
 		## 0: For each src app
 		##    0a: Checkout/update the src
 		## 1: For each app
@@ -60,13 +60,13 @@ class FishMonger():
 		## Clear out toolchains.
 		self.tool_chains = [];
 
-		print "Configuring"
 		print "==> Updating codebases"
 		app_dirs = ["."] + [self.retrieveCode(self.config.get("DEP_DIR", "dep"), codebase) for codebase in self.config.get("DEPENDENCIES", [])] + \
 			PyFind.getDirDirs(self.config["SRC_DIR"])
 			
 		apps_byName = {}
 		## For each app
+
 		for app_dir in app_dirs:
 			## Generate config
 			t_appconfig = fishmonger.AppConfig(app_dir)
@@ -93,17 +93,30 @@ class FishMonger():
 		tcs_byName    = {}                ## String         -> ToolChain() mapping		
 		t_apps_byName = dict(apps_byName) ## Copy made so we can alter it's state
 		## Configure External ToolChains
+
 		for t_tc in ToolChains:
+			t_action = action
+			if isinstance(t_tc, tuple) and len(t_tc) == 2:
+				(t_tc, t_action) = t_tc
+
 			## Generate a tool chain instance.
 			tc         = t_tc.ToolChain()
 			tc_name    = tc.getName()
+
 			## Get the list of apps this toolchain can build
 			buildable_apps = tc.configure(self.config, t_apps_byName.values())
+
+			for t in tc.prerequisiteTools():
+				tt_action = action
+				if isinstance(t, tuple) and len(t) == 2:
+					(t, tt_action) = t
+
+				ToolChains.append((fishmonger.AllToolChains[t], tt_action))
 
 			## If the toolchain builds any apps
 			if isinstance(buildable_apps, list) and buildable_apps != []:
 				## Add it to the list of usable toolchains
-				tcs_byName[tc_name] = tc
+				tcs_byName[tc_name] = (tc, t_action)
 				
 				## Store the apps this toolchain builds
 				tc_apps[tc_name]    = buildable_apps
@@ -119,9 +132,11 @@ class FishMonger():
 		
 		## We need to determine build order for tool chains.
 		## Mapping toolchain -> prerequisite toolchains
-		tc_priorities      = {x.name : PySet.Set(x.prerequisiteTools()) for x in tcs_byName.values()}
+		tc_priorities      = {x.name : PySet.Set(x.prerequisiteToolNames()) for (x, y) in tcs_byName.values()}
+
 		## Mapping app -> prerequisite apps		
 		app_priorities     = {x.name : PySet.Set(x.prerequisiteApps())  for x in apps_byName.values()}
+
 		## Get tool chains that apps depend on 
 		app_tcs_priorities = {name : PySet.Set() for name in app_names}
 
@@ -178,43 +193,45 @@ class FishMonger():
 
 		tc_priorities    = t_tc_priorities
 		tool_chain_order = PyUtil.determinePriority(tc_priorities)
+
 		self.tool_chains = [tcs_byName[x] for x in tool_chain_order]
+		
+	def runAction(self):
+		for (tool_chain, action) in self.tool_chains:
+			if hasattr(tool_chain, action):
+				print "==>", tool_chain.name, "-", action
+				action = getattr(tool_chain, action)
+				action()
 
-	def build(self):
+	def build(self, tools):
 		print "Building"
-		for tool_chain in self.tool_chains:
-			print "==>", tool_chain.name
-			tool_chain.build()
+		self.configure("build", tools)
+		self.runAction()
 
-	def install(self):
+	def install(self, tools):
 		print "Installing"
-		for tool_chain in self.tool_chains:
-			print "==>", tool_chain.name
-			tool_chain.install()
+		self.configure("install", tools)
+		self.runAction()
 
-	def doc(self):
+	def document(self, tools):
 		print "Documenting"
-		for tool_chain in self.tool_chains:
-			print "==>", tool_chain.name
-			tool_chain.doc()
+		self.configure("document", tools)
+		self.runAction()
 
-	def clean(self):
+	def clean(self, tools):
 		print "Cleaning"
-		for tool_chain in self.tool_chains:
-			print "==>", tool_chain.name
-			tool_chain.clean()
+		self.configure("clean", tools)
+		self.runAction()
 
-	def generate(self):
+	def generate(self, tools):
 		print "Generating"
-		for tool_chain in self.tool_chains:
-			print "==>", tool_chain.name
-			tool_chain.generate()
+		self.configure("generate", tools)
+		self.runAction()
 
-	def link(self):
+	def link(self, tools):
 		print "Linking"
-		for tool_chain in self.tool_chains:
-			print "==>", tool_chain.name
-			tool_chain.link()
+		self.configure("link", tools)
+		self.runAction()
 
 def main():
 	cli = PyConfig.CLIConfig()
@@ -235,27 +252,38 @@ def main():
 	fishmonger.addInternalToolChains(extraToolChains)
 	fishmonger.addInternalToolChains(cli.get("INTERNAL_TOOL", []))
 	fishmonger.addExternalToolChains(cli.get("EXTERNAL_TOOL", []))
+	fishmonger.addGenerateToolChains(cli.get("GENERATE_TOOL", []))
+	fishmonger.addBuildToolChains(   cli.get("BUILD_TOOL",    []))
+	fishmonger.addLinkToolChains(    cli.get("LINK_TOOL",     []))
+	fishmonger.addInstallToolChains( cli.get("INSTALL_TOOL",  []))
+	fishmonger.addDocumentToolChains(cli.get("DOC_TOOL",      []))
 
 	fish    = FishMonger(**{"defaults" : defaults})
 
-	actions = {}
-	actions["clean"]    = [(fish.clean,    [])]
+	tools_for_all       = fishmonger.InternalToolChains + fishmonger.ExternalToolChains
 
-	actions["build"]    = [(fish.generate, []), (fish.build, []), (fish.link, [])]
+	actions = {}
+	actions["clean"]    = [(fish.clean, tools_for_all)]
+
+	actions["build"]    = [
+		(fish.generate, tools_for_all + fishmonger.GenerateToolChains),
+		(fish.build,    tools_for_all + fishmonger.BuildToolChains),
+		(fish.link,     tools_for_all + fishmonger.LinkToolChains)
+	]
 	actions["compile"]  = actions["build"]
 
-	actions["install"]  = [(fish.install,  [])]
-	actions["doc"]      = [(fish.doc,      [])]
-	actions["test"]     = [(None,          [])]
+	actions["install"]  = [(fish.install,  tools_for_all + fishmonger.InstallToolChains)]
+	actions["doc"]      = [(fish.document, tools_for_all + fishmonger.DocumentToolChains)]
+	actions["document"] = actions["doc"]
+	actions["test"]     = [(None, [])]
 
 	
 	if cli[0] in actions:
 		tasks = actions[cli[0]]
 		for (task, tools) in tasks:
-			fish.configure(tools)
-			task()
+			task(tools)
 	else:
-		print "Usage: fishmonger <clean|build|compile|install|doc> [ToolChain[s]]"
+		print "Usage: fishmonger <clean|build|compile|install|doc|document> [ToolChain[s]]"
 		return 0
 
 main()

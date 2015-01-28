@@ -159,23 +159,35 @@ class ToolChain(object):
 
 	## Build runs the commands that each app says to use.
 	def build(self):
-		return self.funAction("build", self.buildApp)
+		return self.runAction("build", self.buildApp)
 
 	## buildApp is to return a list of strings and functions to call to build the app.
 	def buildApp(self, app):
 		raise ToolChainException("%s MUST implement buildApp or override build!" % self.__class__)
 
 	def install(self):
-		return self.funAction("install", self.installApp)
+		return self.runAction("install", self.installApp)
 
 	def installApp(self, app):
 		raise ToolChainException("%s MUST implement installApp or override install!" % self.__class__)
 
 	def document(self):
-		return self.funAction("document", self.documentApp)
+		return self.runAction("document", self.documentApp)
 
 	def documentApp(self, app):
-		raise ToolChainException("%s MUST implement installDoc or override doc!" % self.__class__)
+		raise ToolChainException("%s MUST implement documentApp or override document!" % self.__class__)
+
+	def generate(self):
+		return self.runAction("generate", self.generateApp)
+
+	def generateApp(self, app):
+		raise ToolChainException("%s MUST implement generateApp or override generate!" % self.__class__)
+
+	def link(self):
+		return self.runAction("link", self.linkApp)
+
+	def linkApp(self, app):
+		raise ToolChainException("%s MUST implement linkApp or override link!" % self.__class__)
 
 	def prerequisiteTools(self):
 		## Get the toolchains for the apps, then merge
@@ -183,6 +195,20 @@ class ToolChain(object):
 		if not hasattr(self, "config"):
 			return []
 		return self.config.get("BUILD_AFTER_TOOLS", [])
+
+	def prerequisiteToolNames(self):
+		## Get the toolchains for the apps, then merge
+		## to get the toolchains for this toolchain
+		if not hasattr(self, "config"):
+			return []
+
+		tool_names = []
+		for x in self.config.get("BUILD_AFTER_TOOLS", []):
+			if isinstance(x, tuple) and len(x) == 2:
+				(x, y) = x
+			tool_names.append(x)
+
+		return tool_names
 
 	def getAppConfig(self, app_name):
 		config = AppConfig(self.app_configs_byName[app_name].dir)
@@ -194,14 +220,18 @@ class ToolChain(object):
 	def getName(self):
 		if not hasattr(self, "name"):
 			self.name   = self.__module__.split(".")[-1:][0]
-		return self.name;
+		return self.name
 
-InternalToolChains   = PySet.Set()
-ExternalToolChains   = PySet.Set()
+AllToolChains      = {}
 
-GenerationToolChains = PySet.Set()
-BuildToolChains      = PySet.Set()
-LinkToolChains       = PySet.Set()
+InternalToolChains = PySet.Set()
+ExternalToolChains = PySet.Set()
+
+GenerateToolChains = PySet.Set()
+BuildToolChains    = PySet.Set()
+LinkToolChains     = PySet.Set()
+DocumentToolChains = PySet.Set()
+InstallToolChains  = PySet.Set()
 
 def addToolChains(array, target="InternalToolChains", prefix=""):
 	if prefix != "":
@@ -212,32 +242,46 @@ def addToolChains(array, target="InternalToolChains", prefix=""):
 		modules.append(prefix + c)
 	PyUtil.loadModules(modules, target)
 
+	tmp = AllToolChains
+	for c in array:
+		exec("tmp[\"" + c + "\"] = " + prefix + c)
+
 def addInternalToolChains(array):
+	addToolChains(array, AllToolChains)
 	addToolChains(array, InternalToolChains)
-	addToolChains(array, GenerationToolChains)
-	addToolChains(array, BuildToolChains)
-	addToolChains(array, LinkToolChains)
-
+	
 def addExternalToolChains(array):
+	addToolChains(array, AllToolChains)
 	addToolChains(array, ExternalToolChains)
-	addToolChains(array, GenerationToolChains)
-	addToolChains(array, BuildToolChains)
-	addToolChains(array, LinkToolChains)
-
-def addGenerationToolChains(array):
-	addToolChains(array, ExternalToolChains)
-	addToolChains(array, GenerationToolChains)
+	
+def addGenerateToolChains(array):
+	addToolChains(array, AllToolChains)
+	addToolChains(array, GenerateToolChains)
 
 def addBuildToolChains(array):
-	addToolChains(array, ExternalToolChains)
+	addToolChains(array, AllToolChains)
 	addToolChains(array, BuildToolChains)
 
 def addLinkToolChains(array):
-	addToolChains(array, ExternalToolChains)
+	addToolChains(array, AllToolChains)
 	addToolChains(array, LinkToolChains)
+
+def addDocumentToolChains(array):
+	addToolChains(array, AllToolChains)
+	addToolChains(array, DocumentToolChains)
+
+def addInstallToolChains(array):
+	addToolChains(array, AllToolChains)
+	addToolChains(array, InstallToolChains)
 
 addToolChains(fishmonger.toolchains.internal(), InternalToolChains, "fishmonger.toolchains");
 addToolChains(fishmonger.toolchains.external(), ExternalToolChains, "fishmonger.toolchains");
+
+addToolChains(fishmonger.toolchains.generate(), GenerateToolChains, "fishmonger.toolchains");
+addToolChains(fishmonger.toolchains.build(),    BuildToolChains,    "fishmonger.toolchains");
+addToolChains(fishmonger.toolchains.link(),     LinkToolChains,     "fishmonger.toolchains");
+addToolChains(fishmonger.toolchains.document(), DocumentToolChains, "fishmonger.toolchains");
+addToolChains(fishmonger.toolchains.install(),  InstallToolChains,  "fishmonger.toolchains");
 
 
 
