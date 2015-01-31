@@ -36,6 +36,8 @@ class FishMonger():
 				if self.config.get("SKIP_UPDATE", "False").upper() != "TRUE":
 					print "====> Updating:", name
 					PyRCS.update(target_dir)
+		else:
+			print "====> Skipping:", name
 		return target_dir
 
 	def clean(self, ToolChain):
@@ -61,12 +63,12 @@ class FishMonger():
 		self.tool_chains = [];
 
 		print "==> Updating codebases"
-		app_dirs = ["."] + [self.retrieveCode(self.config.get("DEP_DIR", "dep"), codebase) for codebase in self.config.get("DEPENDENCIES", [])] + \
+		app_dirs = [self.retrieveCode(self.config.get("DEP_DIR", "dep"), codebase) for codebase in self.config.get("DEPENDENCIES", [])] + \
 			PyFind.getDirDirs(self.config["SRC_DIR"])
-			
+		app_dirs = PySet.Set([PyPath.makeRelative(d) for d in app_dirs])
+		
 		apps_byName = {}
 		## For each app
-
 		for app_dir in app_dirs:
 			## Generate config
 			t_appconfig = fishmonger.AppConfig(app_dir)
@@ -75,15 +77,13 @@ class FishMonger():
 			## For each dependency
 			dep_dirs = [self.retrieveCode(self.config.get("DEP_DIR", "dep"), codebase) for codebase in t_appconfig.get("DEPENDENCIES", [])] + \
 				PyFind.getDirDirs(os.path.join(app_dir, t_appconfig["SRC_DIR"]))
-				
-			for dep_dir in dep_dirs:
-				if dep_dir in app_dirs:
-					continue
-				app_dirs.append(dep_dir)
+			dep_dirs = PySet.Set([PyPath.makeRelative(d) for d in dep_dirs])
+
+			app_dirs.append(dep_dirs)
 
 		## Now that all code is checked out find the lib and include dirs
-		self.config["LIB_DIRS"]     = self.config.getDirs("LIB_DIRS")     + PyFind.getDirs(pattern="*/lib")
-		self.config["INCLUDE_DIRS"] = self.config.getDirs("INCLUDE_DIRS") + PyFind.getDirs(pattern="*/include")
+		self.config["LIB_DIRS"]     = PySet.Set(self.config.getDirs("LIB_DIRS"))     + PySet.Set(PyFind.getDirs(pattern="*/lib"))
+		self.config["INCLUDE_DIRS"] = PySet.Set(self.config.getDirs("INCLUDE_DIRS")) + PySet.Set(PyFind.getDirs(pattern="*/include"))
 		
 		app_names     = apps_byName.keys()
 		app_tcs       = {                 ## App Name -> ToolChains used
@@ -139,6 +139,9 @@ class FishMonger():
 
 		## Get tool chains that apps depend on 
 		app_tcs_priorities = {name : PySet.Set() for name in app_names}
+
+		print app_dirs
+		print app_priorities
 
 		## Generate mapping of app -> required toolchains
 		for app_priority in app_priorities:

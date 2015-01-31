@@ -13,69 +13,68 @@ import pybase.sh     as PySH
 
 
 class AppConfig(PyConfig.Config):
-	def __init__(self, dir):
-		self.dir      = dir
-		if dir == ".":
-			self.name = os.path.basename(os.getcwd())
-		else:
-			self.name = os.path.basename(dir)
+	def __init__(self, dir, defaults=[], **kwargs):
+		self.dir = dir
 
-		self.defaults = {
+		defaults = {
 			"BUILD_AFTER_APPS"  : [],
-			"BUILD_DIR"         : "build",
 			"DEPENDENCIES"      : [],
+			"INCLUDE_DIRS"      : [],
+			"LIB_DIRS"          : [],
+
 			"DOC_DIR"           : "doc",
-			"INSTALL_PREFIX"    : "install",
-			"SRC_DIR"           : "src"
+			"SRC_DIR"           : "src",
+			"BUILD_DIR"         : "build",
+			"INSTALL_PREFIX"    : "install"
 		}
 
-		self.constants = [
-			"INSTALL_PREFIX"
-		]
+		PyConfig.Config.__init__(self, defaults, **kwargs)
 
-		self.config = {}
+	def parse(self):
+		print "Dir", self.dir
+		if self.dir == ".":
+			self.name = os.path.basename(os.getcwd())
+		else:
+			self.name = os.path.basename(self.dir)
 
-		self.merge(PyConfig.FileConfig(os.path.join(dir, ".fishmonger.app")))
+		self.merge(PyConfig.FileConfig(os.path.join(self.dir, ".fishmonger.app")))
 
 		for (name, url) in self.get("DEPENDENCIES"):
 			if name not in self.get("BUILD_AFTER_APPS"):
 				self.get("BUILD_AFTER_APPS").append(name)
 
-	def appDir(self, dir=""):
-		if dir == "":
-			return self.dir
-		else:
-			return os.path.join(self.dir, dir)
+	def getDir(self, prefix="", suffix="", root="", version=False, absolute=False, app=False, file="", **kwargs):
+		if app:
+			rppt = os.path.join()
 
-	def buildDir(self, dir=""):
-		build_dir = os.path.join(self.dir, self.get("BUILD_DIR"))
-		return os.path.join(build_dir, dir)
+		if version:
+			root = root + "-" + PyRCS.getVersion()
+
+		dir = os.path.join(prefix, os.path.join(root, os.path.join(suffix, file)))
+		if absolute:
+			dir = PyPath.makeAbsolute(dir)
+		return dir
+
+	def appDir(self, **kwargs):
+		return self.getDir(root=self.dir, **kwargs)
+
+	def buildDir(self, dir="", **kwargs):
+		return self.getDir(prefix=self.dir,  root=self.get("BUILD_DIR"), suffix=dir, **kwargs)
 
 	def docDir(self, dir=""):
-		doc_dir = os.path.join(self.dir, self.get("DOC_DIR"))
-		return os.path.join(doc_dir, dir)
+		return self.getDir(prefix=self.dir,  root=self.get("DOC_DIR"),   suffix=dir, **kwargs)
 
-	def srcDir(self, dir=""):
-		src_dir = os.path.join(self.dir, self.get("SRC_DIR"))
-		return os.path.join(src_dir, dir)
+	def srcDir(self, dir="", **kwargs):
+		return self.getDir(prefix=self.dir,  root=self.get("SRC_DIR"),   suffix=dir, **kwargs)
 
-	def installDir(self, dir=""):
-		return PyPath.makeAbsolute(os.path.join(self.get("INSTALL_PREFIX"), dir))
+	def installDir(self, dir="", prefix="", **kwargs):
+		return self.getDir(prefix=self.get("INSTALL_PREFIX"), root=prefix,   suffix=dir, absolute=True, **kwargs)
 
-	def installAppDir(self, dir="", version=True):
-		install_app_dir = os.path.join(self.installDir(dir), self.name)
-		if version:
-			return install_app_dir + "-" + PyRCS.getVersion()
-		else:
-			return install_app_dir
+	def installAppDir(self, dir="", prefix="", **kwargs):
+		return self.getDir(prefix=self.get("INSTALL_PREFIX"), root=os.path.join(prefix, self.name), suffix=dir, absolute=True, **kwargs)
 
-	def installDocDir(self, dir="", version=True):
-		doc_dir = os.path.join(self.installDir("doc"), dir)
-
-		if version:
-			return os.path.join(doc_dir, self.name + "-" + PyRCS.getVersion())
-		else:
-			return os.path.join(doc_dir, self.name)
+	def installDocDir(self, dir="", prefix="", **kwargs):
+		return self.getDir(prefix=self.get("INSTALL_PREFIX"), root=dir, suffix=self.name, absolute=True, **kwargs)
 
 	def prerequisiteApps(self):
 		return self.get("BUILD_AFTER_APPS")

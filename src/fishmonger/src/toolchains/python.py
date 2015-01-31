@@ -28,22 +28,26 @@ class ToolChain(fishmonger.ToolChain):
 	def installApp(self, app):
 		self.installLibrary(app)
 
+		print "InstallApp"
+
+		print app.config
+
 		py_main = app.get("PY_MAIN", None)
 		if py_main != None:
 			self.installApplication(py_main, app)
-			
 
 	def doc(self):
 		pass
 
 	def installApplication(self, py_main, app):
-		py_lib    = PyPath.makeAbsolute(app.installDir("lib/python/lib"))
-		py_main   = PyPath.makeAbsolute(os.path.join(app.installAppDir("lib/python/lib", version=False), py_main))
+		py_lib    = app.installDir(   prefix="lib/python/lib")
+		py_main   = app.installAppDir(prefix="lib/python/lib", version=False, file=py_main)
 
 		app_code  = "#! /bin/bash\n"
 		app_code += "PYTHONPATH=${PYTHONPATH}:%s python %s $@" % (py_lib, py_main)
 
-		file_name = app.installAppDir("bin", version=False)
+		file_name = app.installDir("bin", version=False, file=app.name)
+		print file_name
 		file      = PyFile.file(file_name, "w")
 		file.write(app_code)
 		file.close()
@@ -51,6 +55,6 @@ class ToolChain(fishmonger.ToolChain):
 		PySH.cmd("chmod a+x %s" % file_name)
 
 	def installLibrary(self, app):
-		install_dir = app.installAppDir("lib/python/lib", version=False)
+		install_dir = app.installAppDir(prefix="lib/python/lib", version=False)
 		PySH.copy(app.srcDir(), install_dir, pattern="*.py", force=True)
 		
