@@ -1,3 +1,4 @@
+import fishmonger.config
 import fishmonger.toolchains
 
 import os
@@ -10,74 +11,6 @@ import pybase.find   as PyFind
 import pyrcs         as PyRCS
 import pybase.set    as PySet
 import pybase.sh     as PySH
-
-
-class AppConfig(PyConfig.Config):
-	def __init__(self, dir, defaults=[], **kwargs):
-		self.dir = dir
-
-		defaults = {
-			"BUILD_AFTER_APPS"  : [],
-			"DEPENDENCIES"      : [],
-			"INCLUDE_DIRS"      : [],
-			"LIB_DIRS"          : [],
-
-			"DOC_DIR"           : "doc",
-			"SRC_DIR"           : "src",
-			"BUILD_DIR"         : "build",
-			"INSTALL_PREFIX"    : "install"
-		}
-
-		PyConfig.Config.__init__(self, defaults, **kwargs)
-
-	def parse(self):
-		print "Dir", self.dir
-		if self.dir == ".":
-			self.name = os.path.basename(os.getcwd())
-		else:
-			self.name = os.path.basename(self.dir)
-
-		self.merge(PyConfig.FileConfig(os.path.join(self.dir, ".fishmonger.app")))
-
-		for (name, url) in self.get("DEPENDENCIES"):
-			if name not in self.get("BUILD_AFTER_APPS"):
-				self.get("BUILD_AFTER_APPS").append(name)
-
-	def getDir(self, prefix="", suffix="", root="", version=False, absolute=False, app=False, file="", **kwargs):
-		if app:
-			rppt = os.path.join()
-
-		if version:
-			root = root + "-" + PyRCS.getVersion()
-
-		dir = os.path.join(prefix, os.path.join(root, os.path.join(suffix, file)))
-		if absolute:
-			dir = PyPath.makeAbsolute(dir)
-		return dir
-
-	def appDir(self, **kwargs):
-		return self.getDir(root=self.dir, **kwargs)
-
-	def buildDir(self, dir="", **kwargs):
-		return self.getDir(prefix=self.dir,  root=self.get("BUILD_DIR"), suffix=dir, **kwargs)
-
-	def docDir(self, dir=""):
-		return self.getDir(prefix=self.dir,  root=self.get("DOC_DIR"),   suffix=dir, **kwargs)
-
-	def srcDir(self, dir="", **kwargs):
-		return self.getDir(prefix=self.dir,  root=self.get("SRC_DIR"),   suffix=dir, **kwargs)
-
-	def installDir(self, dir="", prefix="", **kwargs):
-		return self.getDir(prefix=self.get("INSTALL_PREFIX"), root=prefix,   suffix=dir, absolute=True, **kwargs)
-
-	def installAppDir(self, dir="", prefix="", **kwargs):
-		return self.getDir(prefix=self.get("INSTALL_PREFIX"), root=os.path.join(prefix, self.name), suffix=dir, absolute=True, **kwargs)
-
-	def installDocDir(self, dir="", prefix="", **kwargs):
-		return self.getDir(prefix=self.get("INSTALL_PREFIX"), root=dir, suffix=self.name, absolute=True, **kwargs)
-
-	def prerequisiteApps(self):
-		return self.get("BUILD_AFTER_APPS")
 
 class ToolChainException(Exception):
 	def __init__(self, value):
@@ -92,8 +25,7 @@ class ToolChain(object):
 		raise ToolChainException("%s MUST implement init!" % self.__class__)
 
 	## Functions that MAY be implemented, but have default behavior that should be good enough.
-	def configure(self, fish_config, app_configs):
-	#def configure(self, file=None, extensions=[], defaults={}, app_config=[]):
+	def configure(self, env_config, app_configs):
 		self.getName()
 
 		if not hasattr(self, "defaults"):
@@ -104,10 +36,8 @@ class ToolChain(object):
 		elif not isinstance(self.extensions, list):
 			raise ToolChainException("%s MUST define a list of extensions during __init__!" % self.__class__)
 
-		self.base_config = fish_config
-
-		self.config = PyConfig.Config(defaults=self.defaults)
-		self.config.merge(PyConfig.FileConfig(os.path.join(".", ".fishmonger." + self.name)))
+		self.env_config  = env_config
+		self.tool_config = fishmonger.config.ToolChainConfig(self.getName(), defaults=self.defaults, env_config=self.env_config)
 
 		app_prerequisites         = {}
 		self.tc_configs_byAppName = {}
@@ -115,26 +45,24 @@ class ToolChain(object):
 		for config in app_configs:
 			if PyFind.findAllByExtensions(self.extensions, config.srcDir(), root_only=True) != []:
 				## Update the tool chain config based on this applications specific toolchain config.
-				self.tc_configs_byAppName[config.name] = self.config.clone()
-				self.tc_configs_byAppName[config.name].merge(PyConfig.FileConfig(os.path.join(config.appDir(), ".fishmonger." + self.name)))
+				app_tool_config                        = self.tool_config.clone()
+				app_tool_config.merge(PyConfig.FileConfig(os.path.join(config.dir, ".fishmonger." + self.getName())))
 
-				self.app_configs_byName[config.name] = config
+				self.tc_configs_byAppName[config.name] = fishmonger.config.AppConfig(config.dir, env_config=self.env_config, tool_config=app_tool_config)
+				self.app_configs_byName[config.name]   = self.tc_configs_byAppName[config.name]
 
-				app_prerequisites[config.name] = config.prerequisiteApps()
+				app_prerequisites[config.name]         =  self.tc_configs_byAppName[config.name].prerequisiteApps()
 
 		app_order = PyUtil.determinePriority(app_prerequisites)
 		self.apps = []
 		for app in app_order:
-			if app in self.app_configs_byName:
-				self.apps.append(self.getAppConfig(app))
+			self.apps.append(self.app_configs_byName[app])
 
 		## Return the list of apps used
 		return self.app_configs_byName.keys()
 
 	def runAction(self, action, function):
 		for app in self.apps:
-			app_config = {}
-
 			print "====>", app.name
 			if not os.path.isdir(app.buildDir()):
 				os.makedirs(app.buildDir())
@@ -209,13 +137,6 @@ class ToolChain(object):
 
 		return tool_names
 
-	def getAppConfig(self, app_name):
-		config = AppConfig(self.app_configs_byName[app_name].dir)
-		config.merge(self.base_config)
-		config.merge(self.tc_configs_byAppName[app_name])
-		config.merge(self.app_configs_byName[app_name])
-		return config
-
 	def getName(self):
 		if not hasattr(self, "name"):
 			self.name   = self.__module__.split(".")[-1:][0]
@@ -232,7 +153,7 @@ LinkToolChains     = PySet.Set()
 DocumentToolChains = PySet.Set()
 InstallToolChains  = PySet.Set()
 
-def addToolChains(array, target="InternalToolChains", prefix=""):
+def addToolChains(array, target, prefix=""):
 	if prefix != "":
 		prefix += "."
 

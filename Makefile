@@ -36,6 +36,6 @@ python-libs:
 
 
 update-libs:
-	@cd py-libs/pybase && git pull
-	@cd py-libs/pyerl  && git pull
-	@cd py-libs/pyrcs  && git pull
+	@cd py-deps/pybase && git pull
+	@cd py-deps/pyerl  && git pull
+	@cd py-deps/pyrcs  && git pull

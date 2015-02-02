@@ -2,7 +2,6 @@ import os.path
 
 import pybase.config
 import pybase.file as PyFile
-import pybase.path as PyPath
 import pybase.sh   as PySH
 
 import fishmonger
@@ -28,10 +27,6 @@ class ToolChain(fishmonger.ToolChain):
 	def installApp(self, app):
 		self.installLibrary(app)
 
-		print "InstallApp"
-
-		print app.config
-
 		py_main = app.get("PY_MAIN", None)
 		if py_main != None:
 			self.installApplication(py_main, app)
@@ -47,7 +42,6 @@ class ToolChain(fishmonger.ToolChain):
 		app_code += "PYTHONPATH=${PYTHONPATH}:%s python %s $@" % (py_lib, py_main)
 
 		file_name = app.installDir("bin", version=False, file=app.name)
-		print file_name
 		file      = PyFile.file(file_name, "w")
 		file.write(app_code)
 		file.close()
