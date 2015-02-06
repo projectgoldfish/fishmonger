@@ -60,6 +60,8 @@ class AppConfig(PyConfig.Config):
 		## Merge in the tool config
 		self.merge(self.tool_config)
 
+		print "???", self.dir, self["DEPENDENCIES"], self.app_config.config
+
 		## Clear out values we will not inherit
 		self["DEPENDENCIES"] = self.defaults["DEPENDENCIES"]
 
@@ -212,14 +214,22 @@ class ConfigTree():
 	def __init__(self, parent=None, file=".fishmonger", dir=".", mapping={}):
 		self.parent     = parent
 
+		self.dir        = dir
+
 		mapping[dir]    = self
 
+		print "File", os.path.join(dir, file)
+
 		dir_config      = PyConfig.FileConfig(os.path.join(dir, file))
+		print "\tDIR", dir_config.config
+
 		if parent:
 			self.config = parent.config.clone()
 			self.config.merge(dir_config)
+
+			print "\t\tMerged", self.config.config
 		else:
-			self.config = PyConfig.FileConfig(file)
+			self.config = dir_config
 
 		self.children   = [ConfigTree(parent=self, file=file, dir=d, mapping=mapping) for d in PyFind.getDirDirs(dir)]
 		self.mapping    = mapping
@@ -227,7 +237,20 @@ class ConfigTree():
 	def __getitem__(self, key):
 		return self.mapping[key]
 
-	def getNodes(self, root=None):
+	def __str__(self):
+		print  "\n----\n"
+		print "Node " + self.dir
+		for c in self.children:
+			print "\tChild", c.dir
+
+		print "CONF", self.config.config
+		
+		for c in self.children:
+			print c
+		return ""
+		
+
+	def getNodes(self):
 		return self.mapping.keys()
 
 

@@ -23,7 +23,8 @@ class ToolChain(fishmonger.ToolChain):
 			"EXECUTABLE" : "false"
 		}
 
-	def buildApp(self, app):
+	def buildApp(self, src_dir, app):
+		print "BUILD"
 		includes = " "
 		for include in app["INCLUDE_DIRS"]:
 			if include == "":

@@ -4,7 +4,7 @@ def internal():
 
 def external():
 	return [
-		"rebar"
+#		"rebar"
 	]
 
 def generate():
@@ -14,11 +14,11 @@ def generate():
 def build():
 	return [
 		"python",
-		"gplusplus",
+#		"gplusplus",
 		"erlc",
-		"jscc",
-		"erl_app",
-		"javac"
+#		"jscc",
+#		"erl_app",
+#		"javac"
 	]
 
 def link():
@@ -28,14 +28,14 @@ def link():
 def install():
 	return [
 		"python",
-		"erl_app",
-		"jar",
-		"java_app"
+#		"erl_app",
+#		"jar",
+#		"java_app"
 	]
 
 def document():
 	return [
-		"edoc",
-		"jsdoc",
-		"javadoc"
+#		"edoc",
+#		"jsdoc",
+#		"javadoc"
 	]

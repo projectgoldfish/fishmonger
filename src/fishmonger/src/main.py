@@ -1,5 +1,7 @@
 #! /usr/bin/python
 import os
+import sys
+
 import fishmonger
 import fishmonger.config
 
@@ -26,7 +28,7 @@ class FishMonger():
 
 	def retrieveCode(self, target, codebase):
 		(name, url) = codebase
-		target_dir = os.path.join(target, name)
+		target_dir  = os.path.join(target, name)
 		
 		if name not in self.updated_repos:
 			self.updated_repos[name] = True
@@ -50,15 +52,21 @@ class FishMonger():
 		src_dir    = os.path.join(root, config["SRC_DIR"])
 		if os.path.isdir(src_dir):
 			dirs   = PyFind.getDirDirs(src_dir)
+			if dirs == []:
+				dirs = [src_dir]
 		else:
 			dirs   = PyFind.getDirDirs(root)
 		
+		print root, dirs
+
+		f_all      = []
 		f_apps     = []
 		f_sources  = []
 
 		for dir in dirs:
 			(all_apps, apps, sources) = self.determineDirTypes(dir, config_map)
 
+			f_all      += all_apps
 			f_apps     += apps
 			f_sources  += sources
 
@@ -67,18 +75,18 @@ class FishMonger():
 			for f_app in f_apps:
 				config_map[f_app].parent = config
 			config_map[root].src_dirs    = f_sources
-			return ([root] + f_apps, [root], [])
+			return (f_all + [root] + f_apps, [root], [])
 		elif f_sources != []:
 			if os.path.isdir(src_dir):
 				## We have a SRC_DIR! We are definitely an app
 				config_map[root].src_dirs = f_sources + [src_dir]
-				return ([root], [root], [])
+				return (f_all + [root], [root], [])
 			else:
 				## No SRC_DIR we're another source dir
-				return ([], [],  [root] + f_sources)
+				return (f_all, [],  [root] + f_sources)
 		elif f_apps == [] and f_sources == []:
 			## We're just a lowly SRC_DIR
-			return ([], [], [root])
+			return (f_all, [], [root])
 		else:
 			raise FishMongerException("Problem parsing directory types: " + root)
 
@@ -87,33 +95,70 @@ class FishMonger():
 	## configurations here. Caling doConfigure will fill in the blanks.
 	## Once we do that we can setup the tool chains
 	def configure(self, tool_chains, action):
-		
+		print tool_chains
 		## [Module] -> [ToolChain]
 		tool_chains = [t.ToolChain() for t in tool_chains]
 		## [ToolChain] -> {String:ToolChain}
 		tool_chains = {t.getName() : t for t in tool_chains}
+
+		print "\n",tool_chains
 
 		## Go through our directories and build out configuration for each type
 		## env_config/app_config are app_dir -> FileConfig
 		env_config  = fishmonger.config.ConfigTree(file=".fishmonger")
 		app_config  = fishmonger.config.ConfigTree(file=".fishmonger.app")
 		## tool_config is tool name -> app_dir -> FileConfig
-		tool_config = {t : fishmonger.config.ConfigTree(file=".fishmonger" + t) for t in tool_chains.keys()}
+		tool_config = {t : fishmonger.config.ConfigTree(file=".fishmonger." + t) for t in tool_chains.keys()}
 
-		config       = {}
+		#print app_config["./src/fishmonger/src/toolchains"]
+		print tool_config
+		print "\t\t\t"
+		print app_config.getNodes()
+		exit(0)
+		## Generate FULL config for each Tool/Directory
+		config      = {}
 		for tool in tool_config:
 			t_config = {}
+			
 			for dir in env_config.getNodes():
+				##print "Tree", env_config[dir]
+
+				##print "Building config for", dir
+				##print "\tEnv", env_config[dir].config.config
+				##print "\tToo", tool_config[tool][dir].config.config
+				#print "\tApp", app_config[dir].config.config
+
 				t_config[dir] = fishmonger.config.AppConfig(
 					dir,
-					env_config[dir],
-					tool_config[tool][dir],
-					app_config[dir]
+					env_config[dir].config,
+					tool_config[tool][dir].config,
+					app_config[dir].config
 				)
 
-			(t_apps, x, y) = self.determineDirTypes(PyPath.makeRelative(t_config["."]["SRC_DIR"]), t_config)
+				print "\nAPP", t_config[dir].config
+
+			
+
+			t_apps     = PySet.Set()
+			t_src_dirs = PySet.Set([PyPath.makeRelative(t_config["."]["SRC_DIR"])])
+			
+			for t_src_dir in t_src_dirs:
+				print ":::", t_src_dir
+				(tt_apps, x, y) = self.determineDirTypes(t_src_dir, t_config)
+				
+				for ttt_app in PySet.Set(tt_apps):
+					print "===", ttt_app, t_config[ttt_app]["DEPENDENCIES"]
+					tt_config = t_config[ttt_app]
+					for d in tt_config["DEPENDENCIES"]:
+						print "---", d
+						t_src_dirs.append(PyPath.makeRelative(self.retrieveCode(tt_config["DEP_DIR"], d)))
+						
+				t_apps += tt_apps
+				print t_apps
+
 			config[tool] = {t : t_config[t] for t in t_apps}
 			
+
 		## Filter tool_chains to those usable
 		used_tool_chains = []
 		for tool in tool_chains:

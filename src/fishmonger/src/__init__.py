@@ -42,6 +42,7 @@ class ToolChain(object):
 
 		apps = []
 		for app_config in app_configs:
+			print app_config.getName()
 			src_files = PyFind.findAllByExtensions(self.extensions, app_config.srcRoot(), root_only=False)
 			if src_files != []:
 				## Update the tool chain config based on this applications specific toolchain config.				
