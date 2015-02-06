@@ -5,6 +5,7 @@ import pybase.config as PyConfig
 import pybase.set    as PySet
 
 import pybase.path   as PyPath
+import pybase.find   as PyFind
 
 import os.path
 
@@ -17,14 +18,20 @@ def dirs(ds):
 	return 
 
 class AppConfig(PyConfig.Config):
-	def __init__(self, dir, env_config=None, tool_config=None, defaults={}, **kwargs):
+	def __init__(self, dir, env_config, tool_config, app_config):
 		self.dir = dir
 
+		self.parent      = None
+		self.src_dirs    = []
+			
 		self.env_config  = env_config
 		self.tool_config = tool_config
-		
+		self.app_config  = app_config
+
 		defaults = {
+			"BUILD_AFTER_TOOLS" : PySet.Set(),
 			"BUILD_AFTER_APPS"  : PySet.Set(),
+			"BUILD_AFTER"       : PySet.Set(),
 			"DEPENDENCIES"      : PySet.Set(),
 			"INCLUDE_DIRS"      : PySet.Set(),
 			"LIB_DIRS"          : PySet.Set(),
@@ -34,47 +41,53 @@ class AppConfig(PyConfig.Config):
 			"INSTALL_PREFIX"    : "install"
 		}
 
-		PyConfig.Config.__init__(self, defaults=defaults, **kwargs)
+		PyConfig.Config.__init__(self, defaults=defaults)
 		
 	def parse(self):
+		if self.dir         == None and \
+		   self.env_config  == None and \
+		   self.tool_config == None and \
+		   self.app_config  == None:
+			return
+
 		if self.dir == ".":
 			self.name = os.path.basename(os.getcwd())
 		else:
 			self.name = os.path.basename(self.dir)
 
 		## Merge in the env config
-		if self.env_config:
-			self.merge(self.env_config)
-		
-		## Merge in app specific tool config
-		if self.tool_config:
-			file_config = PyConfig.FileConfig(os.path.join(self.dir, ".fishmonger." + self.tool_config.tool_chain))
-			self.tool_config.merge(file_config)
-			self.merge(self.tool_config)
+		self.merge(self.env_config)
+		## Merge in the tool config
+		self.merge(self.tool_config)
 
 		## Clear out values we will not inherit
 		self["DEPENDENCIES"] = self.defaults["DEPENDENCIES"]
-		
-		## Merge in app specific config
-		file_config = PyConfig.FileConfig(os.path.join(self.dir, ".fishmonger.app"))
-		self.merge(file_config)
+
+		## Merge in the app config
+		self.merge(self.app_config)
+
+		## Remerge in CLI Config as that overrides all
+		self.merge(PyConfig.CLIConfig())
 
 		## Update fields
 		for (name, url) in self["DEPENDENCIES"]:
 			self["BUILD_AFTER_APPS"].append(name)
 
+		self.env_config  = None
+		self.tool_config = None
+		self.app_config  = None
+
 	def clone(self):
-		copy             = AppConfig(self.dir)
+		copy             = AppConfig(None, None, None,)
 		copy.dir         = self.dir
 		copy.name        = self.name
-		copy.env_config  = self.env_config
-		copy.tool_config = self.tool_config
-
-		print copy.name
-
+		
 		return self.doClone(copy)
 
-	def getDir(self, prefix="", suffix="", root="", version=False, absolute=False, app=False, file="", **kwargs):
+	def getName(self):
+		return self.name
+
+	def getDir(self, prefix="", suffix="", root="", version=False, absolute=False, app=False, file="", offset=None, **kwargs):
 		if app:
 			root = os.path.join()
 
@@ -82,8 +95,16 @@ class AppConfig(PyConfig.Config):
 			root = root + "-" + PyRCS.getVersion()
 
 		dir = os.path.join(prefix, os.path.join(root, os.path.join(suffix, file)))
+
+		if offset:
+			offset = offset[len(self.srcRoot())+1:]
+			dir = os.path.join(dir, offset)
+
 		if absolute:
 			dir = PyPath.makeAbsolute(dir)
+		else:
+			dir = PyPath.makeRelative(dir)
+
 		return dir
 
 	def appDir(self, **kwargs):
@@ -95,8 +116,14 @@ class AppConfig(PyConfig.Config):
 	def docDir(self, dir=""):
 		return self.getDir(prefix=self.dir,  root=self.get("DOC_DIR"),   suffix=dir, **kwargs)
 
-	def srcDir(self, dir="", **kwargs):
-		return self.getDir(prefix=self.dir,  root=self.get("SRC_DIR"),   suffix=dir, **kwargs)
+	def srcRoot(self, dir="", **kwargs):
+		## If an app_dir/SRC_DIR exists that is the SRC_DIR
+		## otherwise app_dir is the SRC_DIR
+		dir = self.getDir(prefix=self.dir,  root=self.get("SRC_DIR"),   suffix=dir, **kwargs)
+		if os.path.isdir(dir):
+			return dir
+		else:
+			return self.dir
 
 	def installDir(self, dir="", prefix="", **kwargs):
 		return self.getDir(prefix=self.get("INSTALL_PREFIX"), root=prefix,   suffix=dir, absolute=True, **kwargs)
@@ -107,17 +134,25 @@ class AppConfig(PyConfig.Config):
 	def installDocDir(self, dir="", prefix="", **kwargs):
 		return self.getDir(prefix=self.get("INSTALL_PREFIX"), root=dir, suffix=self.name, absolute=True, **kwargs)
 
-	def prerequisiteApps(self):
-		return self.get("BUILD_AFTER_APPS")
+	def getPrerequisites(self):
+		## Return a list of tuples
+		## [((ToolChain, App), [(ToolChain, App)])]
+		## Where each pair MUST be run before this one.
+
+		pre_reqs = []
+		for tool in self["BUILD_AFTER_TOOLS"]:
+			pre_reqs.append((tool, None))
+		for app in self["BUILD_AFTER_APPS"]:
+			pre_reqs.append((tool, None))
+
+		return pre_reqs + self["BUILD_AFTER"]
 
 class ToolChainConfig(PyConfig.Config):
-	def __init__(self, tool_chain, env_config=None, defaults={}, allowed=None, suppress_errors=None, **kwargs):
+	def __init__(self, tool_chain, values, env_config):
 		self.tool_chain = tool_chain
 
-		if env_config:
-			self.env_config = env_config.clone()
-		else:
-			self.env_config = None
+		self.env_config = env_config
+		self.values     = values
 
 		defaults = {
 			"BUILD_AFTER_TOOLS" : PySet.Set(),
@@ -128,22 +163,33 @@ class ToolChainConfig(PyConfig.Config):
 
 		allowed = {x : True for x in defaults.keys()}
 
-		PyConfig.Config.__init__(self, defaults=defaults, allowed=allowed, **kwargs)
+		PyConfig.Config.__init__(self, defaults=defaults, allowed=allowed)
 
 	def parse(self):
+		if self.tool_chain == None and self.env_config == None and self.values == None:
+			return
+
 		## Merge in the env config
-		if self.env_config :
-			self.merge(self.env_config)
-		self.merge(PyConfig.FileConfig(".fishmonger." + self.tool_chain))
+		self.merge(self.env_config)
+		self.merge(self.values)
+
+		## Remerge in CLI Config as that overrides all
+		self.merge(PyConfig.CLIConfig())
+
+
+		self.env_config = None
+		self.values     = None
 
 	def clone(self):
-		copy            = ToolChainConfig(self.tool_chain)
-		copy.env_config = self.env_config
+		copy            = ToolChainConfig(None, None, None)
+		copy.tool_chain = self.tool_chain
+
 		return self.doClone(copy)
 
 class EnvConfig(PyConfig.Config):
-	def __init__(self, defaults={}, **kwargs):
-		defaults = {
+	def __init__(self, values):
+		self.values = values
+		defaults    = {
 			"DEPENDENCIES"      : PySet.Set(),
 			"INCLUDE_DIRS"      : PySet.Set(),
 			"LIB_DIRS"          : PySet.Set(),
@@ -154,10 +200,34 @@ class EnvConfig(PyConfig.Config):
 			"DEP_DIR"           : "deps",
 			"SKIP_UPDATE"       : "FALSE"
 		}
-		PyConfig.Config.__init__(self, defaults=defaults, **kwargs)
-
+		PyConfig.Config.__init__(self, defaults=defaults)
 
 	def parse(self):
 		self.merge(PyConfig.SysConfig())
-		self.merge(PyConfig.FileConfig(".fishmonger"))
+		self.merge(self.values)		
 		self.merge(PyConfig.CLIConfig())
+		self.values = None
+
+class ConfigTree():
+	def __init__(self, parent=None, file=".fishmonger", dir=".", mapping={}):
+		self.parent     = parent
+
+		mapping[dir]    = self
+
+		dir_config      = PyConfig.FileConfig(os.path.join(dir, file))
+		if parent:
+			self.config = parent.config.clone()
+			self.config.merge(dir_config)
+		else:
+			self.config = PyConfig.FileConfig(file)
+
+		self.children   = [ConfigTree(parent=self, file=file, dir=d, mapping=mapping) for d in PyFind.getDirDirs(dir)]
+		self.mapping    = mapping
+
+	def __getitem__(self, key):
+		return self.mapping[key]
+
+	def getNodes(self, root=None):
+		return self.mapping.keys()
+
+

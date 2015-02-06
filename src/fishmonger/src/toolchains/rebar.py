@@ -9,11 +9,11 @@ import fishmonger
 
 class ToolChain(fishmonger.ToolChain):
 	def __init__(self):
-		pass
+		self.extensions = ["rebar.config"]
 
 	## Generate language specific configuration
 	## Return True if we are used, false if not
-	def configure(self, fish_config, app_configs):
+	def configure(self):
 		apps = []
 		for config in app_configs:
 			if os.path.isfile(os.path.join(config.appDir(), "rebar.config")):

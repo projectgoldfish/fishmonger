@@ -1,6 +1,5 @@
 def internal():
 	return [
-		"python"
 	]
 
 def external():
@@ -14,6 +13,7 @@ def generate():
 
 def build():
 	return [
+		"python",
 		"gplusplus",
 		"erlc",
 		"jscc",
@@ -27,6 +27,7 @@ def link():
 
 def install():
 	return [
+		"python",
 		"erl_app",
 		"jar",
 		"java_app"

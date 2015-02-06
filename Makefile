@@ -33,6 +33,8 @@ python-libs:
 	@cp -r py-deps/pyerl/src/* py-libs/pyerl
 	@mkdir -p py-libs/pyrcs
 	@cp -r py-deps/pyrcs/src/* py-libs/pyrcs
+	@mkdir -p py-libs/pygraph
+	@cp -r py-deps/pygraph/src/* py-libs/pygraph
 
 
 update-libs:
