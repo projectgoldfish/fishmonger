@@ -26,26 +26,43 @@ class FishMonger():
 	def __init__(self, config={}):
 		self.updated_repos    = {}
 
-	def retrieveCode(self, target, codebase):
+		defaults              = {
+			"SKIP_UPDATE" : False
+		}
+
+		types                 = {
+			"SKIP_UPDATE" : bool
+		}
+
+		self.command_list     = []
+
+		self.root_config      = PyConfig.Config(defaults=defaults, types=types)
+		self.root_config.merge(PyConfig.SysConfig())
+		self.root_config.merge(PyConfig.CLIConfig())
+
+
+	def retrieveCode(self, target, codebase, skip_update=False):
 		(name, url) = codebase
 		target_dir  = os.path.join(target, name)
 		
 		if name not in self.updated_repos:
 			self.updated_repos[name] = True
 			if not os.path.isdir(target_dir):
-				print "====> Fetching:", name
+				print "==> Fetching:", name
 				PyRCS.clone(url, target_dir)
 			else:
-				if self.env_config["SKIP_UPDATE"].upper() != "TRUE":
-					print "====> Updating:", name
+				if skip_update:
+					print "==> Updating:", name
 					PyRCS.update(target_dir)
 				else:
-					print "====> Skipping:", name
-		else:
-			print "====> Skipping:", name
+					print "==> Skipping:", name
+		
 		return target_dir
 
-	def determineDirTypes(self, root, config_map):		
+	## Updates the config map so apps point to eaach other
+	## and know of thier source directories
+	def determineDirTypes(self, root, config_map):
+
 		config     = config_map[root]
 
 		dirs       = []
@@ -57,11 +74,9 @@ class FishMonger():
 		else:
 			dirs   = PyFind.getDirDirs(root)
 		
-		print root, dirs
-
-		f_all      = []
-		f_apps     = []
-		f_sources  = []
+		f_all      = PySet.Set()
+		f_apps     = PySet.Set()
+		f_sources  = PySet.Set()
 
 		for dir in dirs:
 			(all_apps, apps, sources) = self.determineDirTypes(dir, config_map)
@@ -72,146 +87,143 @@ class FishMonger():
 
 		if f_apps != []:
 			## We are parent to apps.
+
+			print root, "is app"
+			print "\tchildren", f_apps
+			print "\tchildren_src", f_sources
+			
 			for f_app in f_apps:
 				config_map[f_app].parent = config
-			config_map[root].src_dirs    = f_sources
-			return (f_all + [root] + f_apps, [root], [])
+			config_map[root].children    = [config_map[t] for t in f_sources]
+			config_map[root].src_dirs    = list(f_sources)
+			return (f_all + [root] + f_apps, [root], PySet.Set())
 		elif f_sources != []:
 			if os.path.isdir(src_dir):
 				## We have a SRC_DIR! We are definitely an app
-				config_map[root].src_dirs = f_sources + [src_dir]
-				return (f_all + [root], [root], [])
+			
+				print root, "is app"
+				print "\tchildren_src", f_sources
+
+				config_map[root].children =  [config_map[t] for t in f_sources]
+				config_map[root].src_dirs = list(f_sources)
+				return (f_all + [root], [root], PySet.Set())
 			else:
 				## No SRC_DIR we're another source dir
-				return (f_all, [],  [root] + f_sources)
+				return (f_all, f_apps,  f_sources + [root])
 		elif f_apps == [] and f_sources == []:
 			## We're just a lowly SRC_DIR
-			return (f_all, [], [root])
+			return (PySet.Set(), PySet.Set(), [root])
 		else:
 			raise FishMongerException("Problem parsing directory types: " + root)
-
 
 	## We have to detect the applicaiton folders and generate base app
 	## configurations here. Caling doConfigure will fill in the blanks.
 	## Once we do that we can setup the tool chains
 	def configure(self, tool_chains, action):
-		print tool_chains
+		self.command_list = []
+		if tool_chains == []:
+			return
+
 		## [Module] -> [ToolChain]
-		tool_chains = [t.ToolChain() for t in tool_chains]
+		tool_chains  = [t.ToolChain() for t in tool_chains]
 		## [ToolChain] -> {String:ToolChain}
-		tool_chains = {t.getName() : t for t in tool_chains}
+		tool_chains  = {t.name() : t for t in tool_chains}
 
-		print "\n",tool_chains
+		print tool_chains
 
-		## Go through our directories and build out configuration for each type
-		## env_config/app_config are app_dir -> FileConfig
-		env_config  = fishmonger.config.ConfigTree(file=".fishmonger")
-		app_config  = fishmonger.config.ConfigTree(file=".fishmonger.app")
-		## tool_config is tool name -> app_dir -> FileConfig
-		tool_config = {t : fishmonger.config.ConfigTree(file=".fishmonger." + t) for t in tool_chains.keys()}
+		## We just need the SRC_DIR from the root config to get started
+		base_config  = PyConfig.FileConfig(file=".fishmonger", defaults={"SRC_DIR":"src"})
+		
+		allconfig    = {t : {} for t in tool_chains}
+		dependencies = PySet.Set(base_config["SRC_DIR"])
+		for dependency in dependencies:
+			dependency   = PyPath.makeRelative(dependency)
 
-		#print app_config["./src/fishmonger/src/toolchains"]
-		print tool_config
-		print "\t\t\t"
-		print app_config.getNodes()
-		exit(0)
-		## Generate FULL config for each Tool/Directory
-		config      = {}
-		for tool in tool_config:
-			t_config = {}
+			## We only want to search these out once
+			env_config   = fishmonger.config.ConfigTree(dir=dependency, file=".fishmonger")
+			app_config   = fishmonger.config.ConfigTree(dir=dependency, file=".fishmonger.app")
+		
+			print "Searching", dependency
+
+			## Generate FULL config for each Tool/Directory
+			## config will be a mapping[tool_name][app_dir]
 			
-			for dir in env_config.getNodes():
-				##print "Tree", env_config[dir]
+			for tool_chain in tool_chains:
+				## get this toolchains ConfigTree
+				print tool_chains.keys()
+				tool_config = fishmonger.config.ConfigTree(dir=dependency, file=".fishmonger." + tool_chain)
 
-				##print "Building config for", dir
-				##print "\tEnv", env_config[dir].config.config
-				##print "\tToo", tool_config[tool][dir].config.config
-				#print "\tApp", app_config[dir].config.config
+				## For every directory merge the configs
+				for dir in app_config.getNodes():
+						allconfig[tool_chain][dir] = fishmonger.config.AppToolConfig(
+						dir,
+						env_config[dir],
+						tool_config[dir],
+						app_config[dir]
+					)
 
-				t_config[dir] = fishmonger.config.AppConfig(
-					dir,
-					env_config[dir].config,
-					tool_config[tool][dir].config,
-					app_config[dir].config
-				)
+			## We pick first as we do not allow DEPENDENCIES on a tool chain
+			## so it doesnt matter which we use
+			tool = tool_chains.keys()[0]
+			for dir in allconfig[tool]:
+				dependencies.append([self.retrieveCode(allconfig[tool_chain][dir]["DEP_DIR"], x, skip_update=allconfig[tool_chain][dir]["SKIP_UPDATE"]) for x in allconfig[tool_chain][dir]["DEPENDENCIES"]])
 
-				print "\nAPP", t_config[dir].config
-
+		## Get the apps that we need to build
+		apps = PySet.Set()
+		for tool in tool_chains:		
+			[apps.append(self.determineDirTypes(PyPath.makeRelative(d), allconfig[tool])[0]) for d in dependencies]
 			
-
-			t_apps     = PySet.Set()
-			t_src_dirs = PySet.Set([PyPath.makeRelative(t_config["."]["SRC_DIR"])])
-			
-			for t_src_dir in t_src_dirs:
-				print ":::", t_src_dir
-				(tt_apps, x, y) = self.determineDirTypes(t_src_dir, t_config)
-				
-				for ttt_app in PySet.Set(tt_apps):
-					print "===", ttt_app, t_config[ttt_app]["DEPENDENCIES"]
-					tt_config = t_config[ttt_app]
-					for d in tt_config["DEPENDENCIES"]:
-						print "---", d
-						t_src_dirs.append(PyPath.makeRelative(self.retrieveCode(tt_config["DEP_DIR"], d)))
-						
-				t_apps += tt_apps
-				print t_apps
-
-			config[tool] = {t : t_config[t] for t in t_apps}
-			
-
-		## Filter tool_chains to those usable
-		used_tool_chains = []
-		for tool in tool_chains:
-			if tool_chains[tool].uses(config[tool].values()) != []:
-				used_tool_chains.append(tool)
-		self.tool_chains = {t : tool_chains[t] for t in used_tool_chains}
-
 		## Determine Vertexes
-		vertexes  = PySet.Set()
-		for tool in used_tool_chains:
-			for app in config[tool]:
+		vertexes   = PySet.Set()
+		for tool in tool_chains:
+			for app in apps:
+				app   = allconfig[tool][app]
+
+				## If the app has no src_dirs it has nothing to build
+				if app.src_dirs == []:
+					continue
+
+				## Update src_dirs to just those this tool will use
+				src_dirs = tool_chains[tool].uses(app.src_dirs)
+
+				## If there are no src_dirs found this app doesnt use this tool.
+				if src_dirs == []:
+					continue				
+
+				## update src_dirs
+				app.src_dirs = src_dirs
+
+				## Build graph of dependencies
 				edges = PySet.Set()
-
-				app = config[tool][app]
-				
-				t_app_name = app.getName()
-
-				if app.parent:
-					edges.append((tool,app.parent.getName()))
+				root  = app.root()
 
 				## If we build after a tool we build after all nodes of that tool
 				for t in app["BUILD_AFTER_TOOLS"]:
-					edges.append([(t, t_a) for t_a in tool_chains[t]])
+					edges.append(["%s-%s" % (t, t_a) for t_a in tool_chains[t]])
 
 				## If we build after apps just add them for this tool.
 				## these will be taken care of on each tool level
-				edges.append([(tool, a) for a in app["BUILD_AFTER_APPS"]])
+				edges.append(["%s-%s" % (tool, a) for a in app["BUILD_AFTER_APPS"]])
 
 				## Add specific requirements
-				edges.append(app["BUILD_AFTER"])
+				edges.append(["%s-%s" % (tool, a) for (tool, a) in app["BUILD_AFTER"]])
 
-				vertexes.append(((tool, t_app_name), edges))
-
+				vertexes.append(PyGraph.Vertex("%s-%s" % (tool, root), edges, data={"tool":tool, "root":root}))
+		
 		## Graph the vertexes
-		digraph = PyGraph.DiGraph([PyGraph.Vertex(v) for v in vertexes])
+		digraph = PyGraph.DiGraph(vertexes)
 		
 		## Get order and strip out values we want
-		order   = [x for (x, y) in digraph.topologicalOrder()]
+		orders   = digraph.topologicalOrder()
 		## Correct order
-		order.reverse()
-		
-		## build command list
-		self.command_list = [(tool, action, app) for (tool, app) in order]
+		orders.reverse()
 
-		## build stored config
-		self.config  = {tool : {config[tool][app].getName() : config[tool][app] for app in config[tool]} for tool in config}
+		## build command list
+		self.command_list = [(getattr(tool_chains[digraph[order]["tool"]], action), allconfig[digraph[order]["tool"]][digraph[order]["root"]]) for order in orders]
 
 	def runAction(self):
-		for (tool, action, app) in self.command_list:
-			tool_chain = self.tool_chains[tool]
-
-			action = getattr(tool_chain, action)
-			action(self.config[tool][app])
+		for (action, app) in self.command_list:
+			action(app)
 
 	def build(self, tools):
 		print "Building"

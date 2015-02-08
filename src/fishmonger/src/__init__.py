@@ -29,8 +29,8 @@ class ToolChain(object):
 		raise ToolChainException("%s MUST implement init!" % self.__class__)
 
 	## Functions that MAY be implemented, but have default behavior that should be good enough.
-	def uses(self, app_configs):
-		self.getName()
+	def uses(self, app_dirs):
+		self.name()
 
 		if not hasattr(self, "defaults"):
 			self.defaults = {}
@@ -41,30 +41,17 @@ class ToolChain(object):
 			raise ToolChainException("%s MUST define a list of extensions during __init__!" % self.__class__)
 
 		apps = []
-		for app_config in app_configs:
-			print app_config.getName()
-			src_files = PyFind.findAllByExtensions(self.extensions, app_config.srcRoot(), root_only=False)
+		for app_dir in app_dirs:
+			src_files = PyFind.findAllByExtensions(self.extensions, app_dir, root_only=False)
 			if src_files != []:
 				## Update the tool chain config based on this applications specific toolchain config.				
-				apps.append(app_config)
+				apps.append(app_dir)
 		
 		## Return the list of apps used
 		return apps
 
 	def runAction(self, app, action, function):
-		## No source dirs, nothing to do. Must be built by children
-
-		t_src_dirs = []
-		for src_dir in app.src_dirs:
-			src_files = PyFind.findAllByExtensions(self.extensions, src_dir, root_only=False)
-			if src_files != []:
-				t_src_dirs.append(PyPath.makeRelative(src_dir))
-		app.src_dirs = t_src_dirs
-
-		if app.src_dirs == []:
-			return True
-
-		print "==>", self.getName(), "-", app.getName()
+		print "==>", self.name(), "-", app.name()
 
 		if not os.path.isdir(app.buildDir()):
 			os.makedirs(app.buildDir())
@@ -128,13 +115,13 @@ class ToolChain(object):
 	def linkApp(self, src_dir, app):
 		raise ToolChainException("%s MUST implement linkApp or override link!" % self.__class__)
 
-	def getName(self):
-		if not hasattr(self, "name"):
-			self.name   = self.__module__.split(".")[-1:][0]
-		return self.name
+	def name(self):
+		if not hasattr(self, "tc_name"):
+			self.tc_name   = self.__module__.split(".")[-1:][0]
+		return self.tc_name
 
 	def getApps(self):
-		return [app.getName() for app in self.apps]
+		return [app.name() for app in self.apps]
 
 AllToolChains      = {}
 

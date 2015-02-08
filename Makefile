@@ -16,9 +16,10 @@ update: update-libs
 
 clone-libs:
 	@mkdir -p py-deps
-	@git clone git+ssh://git.rleszilm.com/data/git/pybase.git py-deps/pybase
-	@git clone git+ssh://git.rleszilm.com/data/git/pyrcs.git  py-deps/pyrcs
-	@git clone git+ssh://git.rleszilm.com/data/git/pyerl.git  py-deps/pyerl
+	@git clone git+ssh://git.rleszilm.com/data/git/pybase.git   py-deps/pybase
+	@git clone git+ssh://git.rleszilm.com/data/git/pyrcs.git    py-deps/pyrcs
+	@git clone git+ssh://git.rleszilm.com/data/git/pyerl.git    py-deps/pyerl
+	@git clone git+ssh://git.rleszilm.com/data/git/pygraph.git  py-deps/pygraph
 
 fishmonger-libs: python-libs
 	@rm -rf py-libs/fishmonger
@@ -38,6 +39,7 @@ python-libs:
 
 
 update-libs:
-	@cd py-deps/pybase && git pull
-	@cd py-deps/pyerl  && git pull
-	@cd py-deps/pyrcs  && git pull
+	@cd py-deps/pybase   && git pull
+	@cd py-deps/pyerl    && git pull
+	@cd py-deps/pyrcs    && git pull
+	@cd py-deps/pygraph  && git pull
