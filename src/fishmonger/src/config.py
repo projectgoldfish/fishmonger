@@ -17,8 +17,8 @@ def dirs(ds):
 		r_ds.append(t_d.split(""))
 	return 
 
-class AppConfig(PyConfig.Config):
-	pass
+class AppConfigDirTypes:
+	base, app = range(2)
 
 class AppToolConfig(PyConfig.Config):
 	def __init__(self, dir, *args):
@@ -138,6 +138,48 @@ class AppToolConfig(PyConfig.Config):
 
 	def root(self):
 		return self.dir
+
+	def getDir(self, prefix="", suffix="", base="", version=False, absolute=False, file="", install=False, **kwargs):
+		dir = ""
+		if install:
+			dir = self["INSTALL_PREFIX"]
+		else:
+			dir = self["SRC_DIR"]
+
+		if version:
+			base = base + "-" + PyRCS.getVersion()
+ 
+		dir = os.path.join(dir, os.path.join(prefix, os.path.join(base, os.path.join(suffix, file)))
+
+		if absolute:
+			dir = PyPath.makeAbsolute(dir)
+		else:
+			dir = PyPath.makeRelative(dir)
+		return dir
+ 
+ 	def srcDir(self):
+ 		return self.getDir(prefix=self.dir, base=self["SRC_DIR"])
+
+	def buildDir(self):
+		return self.getDir(prefix=self.dir, base=self["BUILD_DIR"])
+
+	def installDir(self, install=True, **kwargs):
+		return self.getDir(install=True, **kwargs)
+
+	def installEtcDir(self, subdir="", file=""):
+		return self.getDir(prefix="etc", base=subdir, file=file, install=True)
+
+	def installBinDir(self, subdir="", file=""):
+		return self.getDir(prefix="bin", base=subdir, file=file,  install=True)
+
+	def installLibDir(self, subdir="", file=""):
+		return self.getDir(prefix="lib", base=subdir, file=file,  install=True)
+
+	def instalVarDir(self, subdir="", file=""):
+		return self.getDir(prefix="var", base=subdir, file=file,  install=True)
+
+	def installLangDir(self, lang, subdir="", file=""):
+		return self.getDir(prefix="lib", base=lang + "/lib/" + self.name(), suffix=subdir, file=file, install=True)
 
 class ConfigMap():
 	def __init__(*args, **kwargs):
