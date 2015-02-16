@@ -7,6 +7,8 @@ import pybase.set    as PySet
 import pybase.path   as PyPath
 import pybase.find   as PyFind
 
+import pybase.kwargs as PyKWArgs
+
 import os.path
 
 def dirs(ds):
@@ -139,7 +141,7 @@ class AppToolConfig(PyConfig.Config):
 	def root(self):
 		return self.dir
 
-	def getDir(self, prefix="", suffix="", base="", version=False, absolute=False, file="", install=False, **kwargs):
+	def getDir(self, prefix="", base="", suffix="", file="", version=False, absolute=False, install=False):
 		dir = ""
 		if install:
 			dir = self["INSTALL_PREFIX"]
@@ -149,37 +151,38 @@ class AppToolConfig(PyConfig.Config):
 		if version:
 			base = base + "-" + PyRCS.getVersion()
  
-		dir = os.path.join(dir, os.path.join(prefix, os.path.join(base, os.path.join(suffix, file)))
+		dir = os.path.join(dir, os.path.join(prefix, os.path.join(base, os.path.join(suffix, file))))
 
-		if absolute:
+		if absolute == True:
 			dir = PyPath.makeAbsolute(dir)
 		else:
 			dir = PyPath.makeRelative(dir)
 		return dir
  
  	def srcDir(self):
- 		return self.getDir(prefix=self.dir, base=self["SRC_DIR"])
+ 		return self.getDir(prefix=self.dir, base=self["SRC_DIR"], **PyKwargs.sanitize((args, **kwargs))
 
 	def buildDir(self):
-		return self.getDir(prefix=self.dir, base=self["BUILD_DIR"])
+		return self.getDir(prefix=self.dir, base=self["BUILD_DIR"], **PyKwargs.sanitize((args, **kwargs))
 
 	def installDir(self, install=True, **kwargs):
-		return self.getDir(install=True, **kwargs)
+		return self.getDir(install=True, **PyKwargs.sanitize((args, **kwargs))
 
 	def installEtcDir(self, subdir="", file=""):
-		return self.getDir(prefix="etc", base=subdir, file=file, install=True)
+		return self.getDir(prefix="etc", base=subdir, file=file, install=True, **PyKwargs.sanitize((args, **kwargs))
 
 	def installBinDir(self, subdir="", file=""):
-		return self.getDir(prefix="bin", base=subdir, file=file,  install=True)
+		return self.getDir(prefix="bin", base=subdir, file=file,  install=True, **PyKwargs.sanitize((args, **kwargs))
 
 	def installLibDir(self, subdir="", file=""):
-		return self.getDir(prefix="lib", base=subdir, file=file,  install=True)
+		return self.getDir(prefix="lib", base=subdir, file=file,  install=True, **PyKwargs.sanitize((args, **kwargs))
 
 	def instalVarDir(self, subdir="", file=""):
-		return self.getDir(prefix="var", base=subdir, file=file,  install=True)
+		return self.getDir(prefix="var", base=subdir, file=file,  install=True, **PyKwargs.sanitize((args, **kwargs))
 
-	def installLangDir(self, lang, subdir="", file=""):
-		return self.getDir(prefix="lib", base=lang + "/lib/" + self.name(), suffix=subdir, file=file, install=True)
+	def installLangDir(self, lang, subdir="", file="", **kwargs):
+		args = ["version", "absolute"]
+		return self.getDir(prefix="lib", base=lang + "/lib/" + self.name(), suffix=subdir, file=file, install=True, **PyKwargs.sanitize((args, **kwargs))
 
 class ConfigMap():
 	def __init__(*args, **kwargs):

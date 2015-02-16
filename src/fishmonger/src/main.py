@@ -88,10 +88,6 @@ class FishMonger():
 		if f_apps != []:
 			## We are parent to apps.
 
-			print root, "is app"
-			print "\tchildren", f_apps
-			print "\tchildren_src", f_sources
-			
 			for f_app in f_apps:
 				config_map[f_app].parent = config
 			config_map[root].children    = [config_map[t] for t in f_sources]
@@ -100,9 +96,6 @@ class FishMonger():
 		elif f_sources != []:
 			if os.path.isdir(src_dir):
 				## We have a SRC_DIR! We are definitely an app
-			
-				print root, "is app"
-				print "\tchildren_src", f_sources
 
 				config_map[root].children =  [config_map[t] for t in f_sources]
 				config_map[root].src_dirs = list(f_sources)
@@ -129,8 +122,6 @@ class FishMonger():
 		## [ToolChain] -> {String:ToolChain}
 		tool_chains  = {t.name() : t for t in tool_chains}
 
-		print tool_chains
-
 		## We just need the SRC_DIR from the root config to get started
 		base_config  = PyConfig.FileConfig(file=".fishmonger", defaults={"SRC_DIR":"src"})
 		
@@ -143,14 +134,11 @@ class FishMonger():
 			env_config   = fishmonger.config.ConfigTree(dir=dependency, file=".fishmonger")
 			app_config   = fishmonger.config.ConfigTree(dir=dependency, file=".fishmonger.app")
 		
-			print "Searching", dependency
-
 			## Generate FULL config for each Tool/Directory
 			## config will be a mapping[tool_name][app_dir]
 			
 			for tool_chain in tool_chains:
 				## get this toolchains ConfigTree
-				print tool_chains.keys()
 				tool_config = fishmonger.config.ConfigTree(dir=dependency, file=".fishmonger." + tool_chain)
 
 				## For every directory merge the configs
