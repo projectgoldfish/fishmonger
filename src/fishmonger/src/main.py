@@ -3,6 +3,7 @@ import os
 import sys
 
 import fishmonger
+
 import fishmonger.config
 
 import pygraph       as PyGraph
@@ -11,6 +12,8 @@ import pybase.config as PyConfig
 import pybase.find   as PyFind
 import pybase.util   as PyUtil
 import pybase.set    as PySet
+
+import pybase.log    as PyLog
 
 import pybase.path   as PyPath
 
@@ -48,14 +51,14 @@ class FishMonger():
 		if name not in self.updated_repos:
 			self.updated_repos[name] = True
 			if not os.path.isdir(target_dir):
-				print "==> Fetching:", name
+				PyLog.output("Fetching", name)
 				PyRCS.clone(url, target_dir)
 			else:
 				if skip_update:
-					print "==> Updating:", name
+					PyLog.output("Updating", name)
 					PyRCS.update(target_dir)
 				else:
-					print "==> Skipping:", name
+					PyLog.output("Skipping", name)
 		
 		return target_dir
 
@@ -87,7 +90,6 @@ class FishMonger():
 
 		if f_apps != []:
 			## We are parent to apps.
-
 			for f_app in f_apps:
 				config_map[f_app].parent = config
 			config_map[root].children    = [config_map[t] for t in f_sources]
@@ -96,9 +98,13 @@ class FishMonger():
 		elif f_sources != []:
 			if os.path.isdir(src_dir):
 				## We have a SRC_DIR! We are definitely an app
-
-				config_map[root].children =  [config_map[t] for t in f_sources]
+				config_map[root].children =  [config_map[t] for t in f_sources + [src_dir]]
 				config_map[root].src_dirs = list(f_sources)
+
+				## Tag the src_roots
+				for child in config_map[root].children:
+					child.src_root = src_dir
+
 				return (f_all + [root], [root], PySet.Set())
 			else:
 				## No SRC_DIR we're another source dir
@@ -127,6 +133,8 @@ class FishMonger():
 		
 		allconfig    = {t : {} for t in tool_chains}
 		dependencies = PySet.Set(base_config["SRC_DIR"])
+		PyLog.output("Fetching dependencies")
+		PyLog.increaseIndent()
 		for dependency in dependencies:
 			dependency   = PyPath.makeRelative(dependency)
 
@@ -155,18 +163,20 @@ class FishMonger():
 			tool = tool_chains.keys()[0]
 			for dir in allconfig[tool]:
 				dependencies.append([self.retrieveCode(allconfig[tool_chain][dir]["DEP_DIR"], x, skip_update=allconfig[tool_chain][dir]["SKIP_UPDATE"]) for x in allconfig[tool_chain][dir]["DEPENDENCIES"]])
+		PyLog.decreaseIndent()
 
 		## Get the apps that we need to build
 		apps = PySet.Set()
 		for tool in tool_chains:		
 			[apps.append(self.determineDirTypes(PyPath.makeRelative(d), allconfig[tool])[0]) for d in dependencies]
-			
+	
 		## Determine Vertexes
 		vertexes   = PySet.Set()
 		for tool in tool_chains:
 			for app in apps:
 				app   = allconfig[tool][app]
 
+				name  = app.name()
 				## If the app has no src_dirs it has nothing to build
 				if app.src_dirs == []:
 					continue
@@ -187,16 +197,18 @@ class FishMonger():
 
 				## If we build after a tool we build after all nodes of that tool
 				for t in app["BUILD_AFTER_TOOLS"]:
-					edges.append(["%s-%s" % (t, t_a) for t_a in tool_chains[t]])
+					edges.append(["%s-%s" % (t, tool_chains[t][t_a].name()) for t_a in tool_chains[t]])
 
 				## If we build after apps just add them for this tool.
 				## these will be taken care of on each tool level
 				edges.append(["%s-%s" % (tool, a) for a in app["BUILD_AFTER_APPS"]])
 
 				## Add specific requirements
-				edges.append(["%s-%s" % (tool, a) for (tool, a) in app["BUILD_AFTER"]])
+				edges.append(["%s-%s" % t for t in app["BUILD_AFTER"]])
 
-				vertexes.append(PyGraph.Vertex("%s-%s" % (tool, root), edges, data={"tool":tool, "root":root}))
+				edges.append(["%s-%s" % (tool, a) for (a, b) in app["DEPENDENCIES"]])
+
+				vertexes.append(PyGraph.Vertex("%s-%s" % (tool, name), edges, data={"tool":tool, "root":root}))
 		
 		## Graph the vertexes
 		digraph = PyGraph.DiGraph(vertexes)
@@ -214,34 +226,46 @@ class FishMonger():
 			action(app)
 
 	def build(self, tools):
-		print "Building"
+		PyLog.output("Building")
+		PyLog.increaseIndent()
 		self.configure(tools, "build")
 		self.runAction()
+		PyLog.decreaseIndent()
 
 	def install(self, tools):
-		print "Installing"
+		PyLog.output("Installing")
+		PyLog.increaseIndent()
 		self.configure(tools, "install")
 		self.runAction()
+		PyLog.decreaseIndent()
 
 	def document(self, tools):
-		print "Documenting"
+		PyLog.output("Documenting")
+		PyLog.increaseIndent()
 		self.configure(tools, "document")
 		self.runAction()
+		PyLog.decreaseIndent()
 
 	def clean(self, tools):
-		print "Cleaning"
+		PyLog.output("Cleaning")
+		PyLog.increaseIndent()
 		self.configure(tools, "clean")
 		self.runAction()
+		PyLog.decreaseIndent()
 
 	def generate(self, tools):
-		print "Generating"
+		PyLog.output("Generating")
+		PyLog.increaseIndent()
 		self.configure(tools, "generate")
 		self.runAction()
+		PyLog.decreaseIndent()
 
 	def link(self, tools):
-		print "Linking"
+		PyLog.output("Linking")
+		PyLog.increaseIndent()
 		self.configure(tools, "link")
 		self.runAction()
+		PyLog.decreaseIndent()
 
 def main():
 	cli = PyConfig.CLIConfig()
@@ -285,7 +309,7 @@ def main():
 		for (task, tools) in tasks:
 			task(tools)
 	else:
-		print "Usage: fishmonger <clean|build|compile|install|doc|document> [ToolChain[s]]"
+		PyLog.output("Usage: fishmonger <clean|build|compile|install|doc|document> [ToolChain[s]]")
 		return 0
 
 main()

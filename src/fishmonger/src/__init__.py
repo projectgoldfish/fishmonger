@@ -14,6 +14,8 @@ import pyrcs         as PyRCS
 import pybase.set    as PySet
 import pybase.sh     as PySH
 
+import pybase.log    as PyLog
+
 import traceback
 
 class ToolChainException(Exception):
@@ -41,6 +43,7 @@ class ToolChain(object):
 			raise ToolChainException("%s MUST define a list of extensions during __init__!" % self.__class__)
 
 		apps = []
+
 		for app_dir in app_dirs:
 			src_files = PyFind.findAllByExtensions(self.extensions, app_dir, root_only=False)
 			if src_files != []:
@@ -51,36 +54,40 @@ class ToolChain(object):
 		return apps
 
 	def runAction(self, app, action, function):
-		print "==>", self.name(), "-", app.name()
-
-		if not os.path.isdir(app.buildDir()):
-			os.makedirs(app.buildDir())
+		PyLog.output(self.name(), app.name())
+		PyLog.increaseIndent()
+	
+		PySH.mkdirs(app.buildDir())
 		try:
 			cmds = []
-			for src_dir in app.src_dirs:
-				t_cmds = function(src_dir, app)
+			
+			for child in app.children:
+				t_cmds = function(child)
 				if t_cmds:
 					cmds += t_cmds
-
 			if not cmds:
+				PyLog.decreaseIndent()
 				return True
 			for cmd in cmds:
 				if hasattr(cmd, "__call__"):
 					cmd(app)
 				elif isinstance(cmd, basestring):
-					if PySH.cmd(cmd, prefix="====>", stdout=True, stderr=True) != 0:
+					if PySH.cmd(cmd, prefix=PyLog.indent, stdout=True, stderr=True) != 0:
 						raise ToolChainException("Failure in %s:%s during: %s" % (action, app, cmd))
 				else:
 					raise ToolChainException("Invalid %s cmd. Cmds must be string or fun: %s : %s" % (action, app, cmd))
 
 		except Exception as e:
 			et, ei, tb = sys.exc_info()
-			print "====> Error during", action, "-", e
+			PyLog.output("Error during %s" % action, exception=str(e))
+			PyLog.increaseIndent()
 			for line in traceback.format_tb(tb):
 				for t_line in line.strip().split("\n"):
-					print "======>", t_line
-			 
+					PyLog.output(t_line)
+			PyLog.decreaseIndent()
+			PyLog.decreaseIndent()
 			return False
+		PyLog.decreaseIndent()
 		return True
 
 	## Build runs the commands that each app says to use.

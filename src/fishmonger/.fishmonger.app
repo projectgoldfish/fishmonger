@@ -5,5 +5,7 @@
 		("pybase",  "git+ssh://git.rleszilm.com/data/git/pybase.git"),
 		("pygraph", "git+ssh://git.rleszilm.com/data/git/pygraph.git")
 	],
-	"PY_MAIN"  : "main.py"
+	"APP_OPTIONS" : {
+		"PY_MAIN"  : "main.py"
+	}
 }

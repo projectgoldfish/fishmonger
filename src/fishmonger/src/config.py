@@ -25,6 +25,7 @@ class AppConfigDirTypes:
 class AppToolConfig(PyConfig.Config):
 	def __init__(self, dir, *args):
 		self.dir          = dir
+		self.src_root     = dir
 		self.src_dirs     = []
 
 		self.parent       = None
@@ -51,7 +52,8 @@ class AppToolConfig(PyConfig.Config):
 			"INSTALL_PREFIX"    : "install",   ## Directory to install into
 
 
-			"TOOL_OPTIONS"      : PySet.Set(),
+			#"TOOL_OPTIONS"      : dict(),
+			"TOOL_CLI_OPTIONS"  : PySet.Set(),
 			"APP_OPTIONS"       : PySet.Set()
 		}
 		
@@ -92,7 +94,9 @@ class AppToolConfig(PyConfig.Config):
 			"SRC_DIR"           : "src",       ## Directory to look for source code in
 			"BUILD_DIR"         : "build",     ## Directory to place built files into
 
-			"TOOL_OPTIONS"      : PySet.Set()
+			"TOOL_CLI_OPTIONS"  : PySet.Set(),
+
+			"TOOL_OPTIONS"      : {}
 		}
 
 		app_defaults  = {
@@ -135,8 +139,20 @@ class AppToolConfig(PyConfig.Config):
 		self.safeMerge(t_app_config)
 		self.safeMerge(PyConfig.CLIConfig())
 
+	def isRoot(self):
+		return self.src_root == self.dir
+
+	def offset(self):
+		if len(self.src_root) < len(self.dir):
+			return self.dir[len(self.src_root)+1:]
+		else:
+			return ""
+
 	def name(self):
-		return os.path.basename(self.dir)
+		name = os.path.basename(self.src_root)
+		if name == self["SRC_DIR"]:
+			return os.path.basename(os.path.dirname(self.src_root))
+		return name
 
 	def root(self):
 		return self.dir
@@ -145,44 +161,58 @@ class AppToolConfig(PyConfig.Config):
 		dir = ""
 		if install:
 			dir = self["INSTALL_PREFIX"]
-		else:
-			dir = self["SRC_DIR"]
-
+		
 		if version:
 			base = base + "-" + PyRCS.getVersion()
  
-		dir = os.path.join(dir, os.path.join(prefix, os.path.join(base, os.path.join(suffix, file))))
+		dir = os.path.join(dir, os.path.join(prefix, os.path.join(base, os.path.join(self.offset(), os.path.join(suffix, file)))))
 
 		if absolute == True:
 			dir = PyPath.makeAbsolute(dir)
 		else:
 			dir = PyPath.makeRelative(dir)
+
 		return dir
  
- 	def srcDir(self):
- 		return self.getDir(prefix=self.dir, base=self["SRC_DIR"], **PyKwargs.sanitize((args, **kwargs))
+ 	def srcDir(self, **kwargs):
+ 		args    = []
+ 		src_dir = os.path.join(self.dir, self["SRC_DIR"])
+ 		if os.path.isdir(src_dir):
+ 			return src_dir
+ 		else:
+ 			return self.dir
 
-	def buildDir(self):
-		return self.getDir(prefix=self.dir, base=self["BUILD_DIR"], **PyKwargs.sanitize((args, **kwargs))
+	def buildDir(self, **kwargs):
+		args = []
+		return self.getDir(prefix=self.dir, base=self["BUILD_DIR"], **PyKWArgs.sanitize(args, **kwargs))
 
 	def installDir(self, install=True, **kwargs):
-		return self.getDir(install=True, **PyKwargs.sanitize((args, **kwargs))
+		args = ["prefix", "base", "suffix", "file"]
+		return self.getDir(install=True, **PyKWArgs.sanitize(args, **kwargs))
 
-	def installEtcDir(self, subdir="", file=""):
-		return self.getDir(prefix="etc", base=subdir, file=file, install=True, **PyKwargs.sanitize((args, **kwargs))
+	def installEtcDir(self, subdir="", file="", **kwargs):
+		args = []
+		return self.getDir(prefix="etc", base=subdir, file=file, install=True, **PyKWArgs.sanitize(args, **kwargs))
 
-	def installBinDir(self, subdir="", file=""):
-		return self.getDir(prefix="bin", base=subdir, file=file,  install=True, **PyKwargs.sanitize((args, **kwargs))
+	def installBinDir(self, subdir="", file="", **kwargs):
+		args = []
+		return self.getDir(prefix="bin", base=subdir, file=file,  install=True, **PyKWArgs.sanitize(args, **kwargs))
 
-	def installLibDir(self, subdir="", file=""):
-		return self.getDir(prefix="lib", base=subdir, file=file,  install=True, **PyKwargs.sanitize((args, **kwargs))
+	def installLibDir(self, subdir="", file="", **kwargs):
+		args = []
+		return self.getDir(prefix="lib", base=subdir, file=file,  install=True, **PyKWArgs.sanitize(args, **kwargs))
 
-	def instalVarDir(self, subdir="", file=""):
-		return self.getDir(prefix="var", base=subdir, file=file,  install=True, **PyKwargs.sanitize((args, **kwargs))
+	def instalVarDir(self, subdir="", file="", **kwargs):
+		args = []
+		return self.getDir(prefix="var", base=subdir, file=file,  install=True, **PyKWArgs.sanitize(args, **kwargs))
 
-	def installLangDir(self, lang, subdir="", file="", **kwargs):
+	def installLangDir(self, lang, subdir="", file="", app=False, **kwargs):
+		name = self.name()
+		if not app:
+			name = ""
+
 		args = ["version", "absolute"]
-		return self.getDir(prefix="lib", base=lang + "/lib/" + self.name(), suffix=subdir, file=file, install=True, **PyKwargs.sanitize((args, **kwargs))
+		return self.getDir(prefix="lib", base=lang + "/lib/" + name, suffix=subdir, file=file, install=True, **PyKWArgs.sanitize(args, **kwargs))
 
 class ConfigMap():
 	def __init__(*args, **kwargs):
