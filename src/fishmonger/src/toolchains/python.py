@@ -24,8 +24,8 @@ class ToolChain(fishmonger.ToolChain):
 			self.installApplication(app)
 
 	def installApplication(self, app):
-		py_lib    = app.installLangDir("python")
-		py_main   = app.installLangDir("python", file=app["APP_OPTIONS"]["PY_MAIN"], app=True)
+		py_lib    = app.installLangDir("python", absolute=True)
+		py_main   = app.installLangDir("python", file=app["APP_OPTIONS"]["PY_MAIN"], app=True, absolute=True)
 
 		app_code  = "#! /bin/bash\n"
 		app_code += "PYTHONPATH=${PYTHONPATH}:%s python %s $@" % (py_lib, py_main)

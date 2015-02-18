@@ -26,6 +26,7 @@ class AppToolConfig(PyConfig.Config):
 	def __init__(self, dir, *args):
 		self.dir          = dir
 		self.src_root     = dir
+		self.app_root     = dir
 		self.src_dirs     = []
 
 		self.parent       = None
@@ -54,19 +55,23 @@ class AppToolConfig(PyConfig.Config):
 
 			#"TOOL_OPTIONS"      : dict(),
 			"TOOL_CLI_OPTIONS"  : PySet.Set(),
-			"APP_OPTIONS"       : PySet.Set()
+			"APP_OPTIONS"       : PySet.Set(),
+
+			## MISC
+			"SKIP_UPDATE"       : False
 		}
 		
 		self.constants    = ["INSTALL_PREFIX"]
 		
 		self.types        = {
 			"INCLUDE_DIRS" : PyConfig.parseDirs,
-			"LIB_DIRS"     : PyConfig.parseDirs
+			"LIB_DIRS"     : PyConfig.parseDirs,
+			"SKIP_UPDATE"  : bool
 		}
 
 		self.allowed      = {x : True for x in self.defaults}
 
-		self.set_behavior = PyConfig.ConfigSetBehavior.write
+		self.set_behavior = PyConfig.ConfigSetBehavior.merge
 		self.parse(*args)
 
 	def parse(self, env_config, tool_config, app_config):
@@ -174,18 +179,16 @@ class AppToolConfig(PyConfig.Config):
 
 		return dir
  
- 	def srcDir(self, **kwargs):
- 		args    = []
+ 	def srcDir(self):
  		src_dir = os.path.join(self.dir, self["SRC_DIR"])
  		if os.path.isdir(src_dir):
  			return src_dir
  		else:
  			return self.dir
 
-	def buildDir(self, **kwargs):
-		args = []
-		return self.getDir(prefix=self.dir, base=self["BUILD_DIR"], **PyKWArgs.sanitize(args, **kwargs))
-
+	def buildDir(self, subdir=""):
+		return os.path.join(os.path.join(self.app_root, self["BUILD_DIR"]), subdir)
+ 		
 	def installDir(self, install=True, **kwargs):
 		args = ["prefix", "base", "suffix", "file"]
 		return self.getDir(install=True, **PyKWArgs.sanitize(args, **kwargs))

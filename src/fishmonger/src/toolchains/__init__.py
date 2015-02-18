@@ -28,6 +28,7 @@ def link():
 def install():
 	return [
 		"python",
+		"erlc",
 #		"erl_app",
 #		"jar",
 #		"java_app"

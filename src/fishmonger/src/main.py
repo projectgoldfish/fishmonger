@@ -54,7 +54,7 @@ class FishMonger():
 				PyLog.output("Fetching", name)
 				PyRCS.clone(url, target_dir)
 			else:
-				if skip_update:
+				if not skip_update:
 					PyLog.output("Updating", name)
 					PyRCS.update(target_dir)
 				else:
@@ -103,6 +103,7 @@ class FishMonger():
 
 				## Tag the src_roots
 				for child in config_map[root].children:
+					child.app_root = os.path.dirname(src_dir)
 					child.src_root = src_dir
 
 				return (f_all + [root], [root], PySet.Set())
@@ -133,10 +134,14 @@ class FishMonger():
 		
 		allconfig    = {t : {} for t in tool_chains}
 		dependencies = PySet.Set(base_config["SRC_DIR"])
+		
 		PyLog.output("Fetching dependencies")
 		PyLog.increaseIndent()
 		for dependency in dependencies:
 			dependency   = PyPath.makeRelative(dependency)
+
+			## append INCLUDE_DIRS
+
 
 			## We only want to search these out once
 			env_config   = fishmonger.config.ConfigTree(dir=dependency, file=".fishmonger")
@@ -164,6 +169,19 @@ class FishMonger():
 			for dir in allconfig[tool]:
 				dependencies.append([self.retrieveCode(allconfig[tool_chain][dir]["DEP_DIR"], x, skip_update=allconfig[tool_chain][dir]["SKIP_UPDATE"]) for x in allconfig[tool_chain][dir]["DEPENDENCIES"]])
 		PyLog.decreaseIndent()
+
+		## Find INCLUDE_DIRS
+		include_dirs = PySet.Set()
+		lib_dirs     = PySet.Set()
+		for dependency in dependencies:
+			include_dirs.append(PyFind.findAllByPattern("*include*", root=dependency, dirs_only=True))
+			lib_dirs.append(    PyFind.findAllByPattern("*lib*",     root=dependency, dirs_only=True))
+
+		## Update config with found INCLUDE_DIRS
+		for t in allconfig:
+			for a in allconfig[t]:
+				allconfig[t][a]["INCLUDE_DIRS"] = include_dirs
+				allconfig[t][a]["LIB_DIRS"]     = lib_dirs
 
 		## Get the apps that we need to build
 		apps = PySet.Set()

@@ -14,16 +14,14 @@ import pyrcs         as PyRCS
 import pybase.set    as PySet
 import pybase.sh     as PySH
 
+import pybase.exception as PyExcept
+
 import pybase.log    as PyLog
 
 import traceback
 
-class ToolChainException(Exception):
-	def __init__(self, value):
-		self.value = value
-	
-	def __str__(self):
-		return repr(self.value)
+class ToolChainException(PyExcept.BaseException):
+	pass
 
 class ToolChain(object):
 	## Functions that MUST be implemented
@@ -54,7 +52,7 @@ class ToolChain(object):
 		return apps
 
 	def runAction(self, app, action, function):
-		PyLog.output(self.name(), app.name())
+		PyLog.output("%s(%s)" % (self.name(), app.name()))
 		PyLog.increaseIndent()
 	
 		PySH.mkdirs(app.buildDir())
@@ -73,10 +71,16 @@ class ToolChain(object):
 					cmd(app)
 				elif isinstance(cmd, basestring):
 					if PySH.cmd(cmd, prefix=PyLog.indent, stdout=True, stderr=True) != 0:
-						raise ToolChainException("Failure in %s:%s during: %s" % (action, app, cmd))
+						raise ToolChainException("Failure while performing action", action=action, app=app, cmd=cmd)
 				else:
 					raise ToolChainException("Invalid %s cmd. Cmds must be string or fun: %s : %s" % (action, app, cmd))
 
+		except PyExcept.BaseException as e:
+			PyLog.increaseIndent()
+			PyLog.output(e)
+			PyLog.decreaseIndent()
+			PyLog.decreaseIndent()
+			return False
 		except Exception as e:
 			et, ei, tb = sys.exc_info()
 			PyLog.output("Error during %s" % action, exception=str(e))
@@ -87,6 +91,7 @@ class ToolChain(object):
 			PyLog.decreaseIndent()
 			PyLog.decreaseIndent()
 			return False
+
 		PyLog.decreaseIndent()
 		return True
 
