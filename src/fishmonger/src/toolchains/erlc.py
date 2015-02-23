@@ -35,8 +35,6 @@ class ToolChain(fishmonger.ToolChain):
 
 	def installApp(self, app):
 		## copy binaries
-		install_erl_dir = app.installLangDir("erlang", app=True, version=True)
-		install_target  = os.path.join(install_erl_dir, "ebin")
-		print app.buildDir("ebin"), " -> ", install_target
-		PySH.copy(app.buildDir("ebin"), install_target, force=True)
+		install_erl_dir = app.installLangDir("erlang", subdir="ebin", app=True, version=True)
+		PySH.copy(app.buildDir("ebin"), install_erl_dir, force=True)
 

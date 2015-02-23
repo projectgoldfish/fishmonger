@@ -1,6 +1,7 @@
 import pybase.config
 import pyerl       as PyErl
-import pybase.util as PyUtil
+import pybase.log  as PyLog
+import pybase.sh   as PySH
 import pybase.find as PyFind
 import os.path
 import shutil
@@ -17,22 +18,16 @@ class ToolChain(fishmonger.ToolChain):
 			"BUILD_DIR"  : "js"
 		}
 
-	def build(self):
-		pass
-
-	def install(self):
-		pass
-
 	def documentApp(self, app):
 		doc_dir = app.installDocDir("js")
 
 		if os.path.isdir(doc_dir):
 			shutil.rmtree(doc_dir)
-			os.makedirs(doc_dir)
+		os.makedirs(doc_dir)
 
 		target_files = ""
-		for js_file in PyFind.findFilesByExts(["js"], app.buildDir()):
-			target_file = os.path.join(app.buildDir(), js_file)
+		for js_file in PyFind.findAllByPattern("*.js", app.srcDir()):
+			target_file = os.path.join(app.srcDir(), js_file)
 			target_files += target_file + " "
 
-		PyUtil.shell("jsdoc -d " + doc_dir + " " + target_files, prefix="======>", stdout=True, stderr=True)
+		PySH.cmd("jsdoc -d " + doc_dir + " " + target_files, prefix=PyLog.indent, stdout=True, stderr=True)

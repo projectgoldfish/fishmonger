@@ -17,7 +17,7 @@ def build():
 #		"gplusplus",
 		"erlc",
 #		"jscc",
-#		"erl_app",
+		"erl_app",
 #		"javac"
 	]
 
@@ -29,14 +29,14 @@ def install():
 	return [
 		"python",
 		"erlc",
-#		"erl_app",
+		"erl_app",
 #		"jar",
 #		"java_app"
 	]
 
 def document():
 	return [
-#		"edoc",
-#		"jsdoc",
+		"edoc",
+		"jsdoc",
 #		"javadoc"
 	]

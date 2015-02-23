@@ -52,10 +52,10 @@ class AppToolConfig(PyConfig.Config):
 
 			"INSTALL_PREFIX"    : "install",   ## Directory to install into
 
-
-			#"TOOL_OPTIONS"      : dict(),
+			"TOOL_OPTIONS"      : {},
 			"TOOL_CLI_OPTIONS"  : PySet.Set(),
-			"APP_OPTIONS"       : PySet.Set(),
+
+			"APP_OPTIONS"       : {},
 
 			## MISC
 			"SKIP_UPDATE"       : False
@@ -132,17 +132,24 @@ class AppToolConfig(PyConfig.Config):
 
 		t_env_config   = PyConfig.Config(defaults=env_defaults, allowed=env_allowed, types=self.types, constants=env_constants)
 		t_env_config.safeMerge(env_config)
-
+		
 		t_tool_config  = PyConfig.Config(defaults=tool_defaults, allowed=tool_allowed, types=self.types, constants=tool_constants)
 		t_tool_config.safeMerge(tool_config)
-
+		
 		t_app_config   = PyConfig.Config(defaults=app_defaults, allowed=app_allowed, types=self.types, constants=app_constants)
 		t_app_config.safeMerge(app_config)
-
+		
 		self.safeMerge(t_env_config)
 		self.safeMerge(t_tool_config)
 		self.safeMerge(t_app_config)
 		self.safeMerge(PyConfig.CLIConfig())
+
+	def mergeIfNull(self, values):
+		for key in values:
+			if key not in self.config:
+				self.config[key] = values[key]
+			elif isinstance(self.config[key], dict) and isinstance(values[key], dict):
+				PyUtil.mergeDicts(self.config[key], values[key])
 
 	def isRoot(self):
 		return self.src_root == self.dir
@@ -179,15 +186,18 @@ class AppToolConfig(PyConfig.Config):
 
 		return dir
  
- 	def srcDir(self):
+	def appDir(self, subdir="", file=""):
+		return os.path.join(os.path.join(self.dir, subdir), file)
+
+ 	def srcDir(self, subdir="", file=""):
  		src_dir = os.path.join(self.dir, self["SRC_DIR"])
  		if os.path.isdir(src_dir):
- 			return src_dir
+ 			return os.path.join(os.path.join(src_dir, subdir), file)
  		else:
- 			return self.dir
+ 			return os.path.join(os.path.join(self.dir, subdir), file)
 
-	def buildDir(self, subdir=""):
-		return os.path.join(os.path.join(self.app_root, self["BUILD_DIR"]), subdir)
+	def buildDir(self, subdir="", file=""):
+		return os.path.join(os.path.join(os.path.join(self.app_root, self["BUILD_DIR"]), subdir), file)
  		
 	def installDir(self, install=True, **kwargs):
 		args = ["prefix", "base", "suffix", "file"]
@@ -205,7 +215,7 @@ class AppToolConfig(PyConfig.Config):
 		args = []
 		return self.getDir(prefix="lib", base=subdir, file=file,  install=True, **PyKWArgs.sanitize(args, **kwargs))
 
-	def instalVarDir(self, subdir="", file="", **kwargs):
+	def installVarDir(self, subdir="", file="", **kwargs):
 		args = []
 		return self.getDir(prefix="var", base=subdir, file=file,  install=True, **PyKWArgs.sanitize(args, **kwargs))
 
@@ -216,6 +226,10 @@ class AppToolConfig(PyConfig.Config):
 
 		args = ["version", "absolute"]
 		return self.getDir(prefix="lib", base=lang + "/lib/" + name, suffix=subdir, file=file, install=True, **PyKWArgs.sanitize(args, **kwargs))
+
+	def installDocDir(self, lang, subdir="", file="", app=None, version=True, **kwargs):
+		args = []
+		return self.getDir(prefix="doc/" + lang, base=self.name(), install=True, version=version, **PyKWArgs.sanitize(args, **kwargs))
 
 class ConfigMap():
 	def __init__(*args, **kwargs):
@@ -237,6 +251,7 @@ class ConfigTree(ConfigMap):
 
 		mapping[dir]    = self
 		dir_config      = PyConfig.FileConfig(file=os.path.join(dir, file), **kwargs)
+		
 		if parent:
 			self.config = parent.config.clone()
 			self.config.merge(dir_config)
@@ -252,6 +267,8 @@ class ConfigTree(ConfigMap):
 
 	def getNodes(self):
 		return self.mapping.keys()
+
+
 
 class ConfigPath(ConfigMap):
 	def __init__(self, parent=None, file=".fishmonger", root=".", path=".", mapping={}, **kwargs):

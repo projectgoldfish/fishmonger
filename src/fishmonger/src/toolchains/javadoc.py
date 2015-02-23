@@ -18,7 +18,7 @@ class ToolChain(fishmonger.ToolChain):
 
 		if os.path.isdir(doc_dir):
 			shutil.rmtree(doc_dir)
-			os.makedirs(doc_dir)
+		os.makedirs(doc_dir)
 
 		java_files = ""
 		for java_file in PyFind.findAllByExts(["java"], app.srcDir()):

@@ -137,26 +137,32 @@ class FishMonger():
 		
 		PyLog.output("Fetching dependencies")
 		PyLog.increaseIndent()
+
+		## We only want to search these out once
+		t_env_config  = PyConfig.FileConfig(file=".fishmonger")
+		t_app_config  = PyConfig.FileConfig(file=".fishmonger.app")
+		
+		t_tool_config = {}
+		for tool_chain in tool_chains:
+			t_tool_config[tool_chain] = PyConfig.FileConfig(file=".fishmonger." + tool_chain, config=tool_chains[tool_chain].defaults)
+			
 		for dependency in dependencies:
 			dependency   = PyPath.makeRelative(dependency)
 
-			## append INCLUDE_DIRS
-
-
 			## We only want to search these out once
-			env_config   = fishmonger.config.ConfigTree(dir=dependency, file=".fishmonger")
-			app_config   = fishmonger.config.ConfigTree(dir=dependency, file=".fishmonger.app")
+			env_config   = fishmonger.config.ConfigTree(dir=dependency, file=".fishmonger",     config=t_env_config.config)
+			app_config   = fishmonger.config.ConfigTree(dir=dependency, file=".fishmonger.app", config=t_app_config.config)
 		
 			## Generate FULL config for each Tool/Directory
 			## config will be a mapping[tool_name][app_dir]
 			
 			for tool_chain in tool_chains:
 				## get this toolchains ConfigTree
-				tool_config = fishmonger.config.ConfigTree(dir=dependency, file=".fishmonger." + tool_chain)
+				tool_config = fishmonger.config.ConfigTree(dir=dependency, file=".fishmonger." + tool_chain, config=t_tool_config[tool_chain].config)
 
 				## For every directory merge the configs
 				for dir in app_config.getNodes():
-						allconfig[tool_chain][dir] = fishmonger.config.AppToolConfig(
+					allconfig[tool_chain][dir] = fishmonger.config.AppToolConfig(
 						dir,
 						env_config[dir],
 						tool_config[dir],
@@ -188,26 +194,38 @@ class FishMonger():
 		for tool in tool_chains:		
 			[apps.append(self.determineDirTypes(PyPath.makeRelative(d), allconfig[tool])[0]) for d in dependencies]
 	
-		## Determine Vertexes
-		vertexes   = PySet.Set()
-		for tool in tool_chains:
-			for app in apps:
-				app   = allconfig[tool][app]
+		## Determine who uses what
+		to_del = []
+		for t_key in allconfig:
+			for a_key in allconfig[t_key]:
+				app   = allconfig[t_key][a_key]
 
-				name  = app.name()
 				## If the app has no src_dirs it has nothing to build
 				if app.src_dirs == []:
+					to_del.append((t_key, a_key))
 					continue
 
 				## Update src_dirs to just those this tool will use
-				src_dirs = tool_chains[tool].uses(app.src_dirs)
+				src_dirs = tool_chains[t_key].uses(app.src_dirs)
 
 				## If there are no src_dirs found this app doesnt use this tool.
 				if src_dirs == []:
-					continue				
+					to_del.append((t_key, a_key))
+					continue
 
-				## update src_dirs
-				app.src_dirs = src_dirs
+		for (t_key, a_key) in to_del:
+			del allconfig[t_key][a_key]
+
+		for t_tool in allconfig:
+			tool_chains[t_tool].apps = allconfig[t_tool].values()
+
+		## Determine Vertexes
+		vertexes   = PySet.Set()
+		for t_key in allconfig:
+			tool      = t_key
+			for a_key in allconfig[t_key]:
+				app   = allconfig[t_key][a_key]
+				name  = app.name()
 
 				## Build graph of dependencies
 				edges = PySet.Set()
@@ -215,18 +233,16 @@ class FishMonger():
 
 				## If we build after a tool we build after all nodes of that tool
 				for t in app["BUILD_AFTER_TOOLS"]:
-					edges.append(["%s-%s" % (t, tool_chains[t][t_a].name()) for t_a in tool_chains[t]])
+					edges.append([(t , allconfig[t][a].name()) for a in allconfig[t]])
 
-				## If we build after apps just add them for this tool.
-				## these will be taken care of on each tool level
-				edges.append(["%s-%s" % (tool, a) for a in app["BUILD_AFTER_APPS"]])
+				## If we build after apps we build after them for each tool
+				## Since we're iterating for each tool we'll get to adding those nodes eventually
+				edges.append([(t, a) for a in app["BUILD_AFTER_APPS"] if a in nameconfig[t]])
 
 				## Add specific requirements
-				edges.append(["%s-%s" % t for t in app["BUILD_AFTER"]])
+				edges.append(app["BUILD_AFTER"])
 
-				edges.append(["%s-%s" % (tool, a) for (a, b) in app["DEPENDENCIES"]])
-
-				vertexes.append(PyGraph.Vertex("%s-%s" % (tool, name), edges, data={"tool":tool, "root":root}))
+				vertexes.append(PyGraph.Vertex((tool, name), edges, data={"tool":tool, "root":root}))
 		
 		## Graph the vertexes
 		digraph = PyGraph.DiGraph(vertexes)
