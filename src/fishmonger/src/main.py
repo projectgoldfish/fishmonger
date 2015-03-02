@@ -120,14 +120,20 @@ class FishMonger():
 	## configurations here. Caling doConfigure will fill in the blanks.
 	## Once we do that we can setup the tool chains
 	def configure(self, tool_chains, action):
+		(external_tools, internal_tools) = tool_chains
+		tool_chains                      = external_tools + internal_tools
+
 		self.command_list = []
 		if tool_chains == []:
 			return
 
 		## [Module] -> [ToolChain]
-		tool_chains  = [t.ToolChain() for t in tool_chains]
+		tool_chains    = [t.ToolChain() for t in tool_chains]
 		## [ToolChain] -> {String:ToolChain}
-		tool_chains  = {t.name() : t for t in tool_chains}
+		tool_chains    = {t.name() : t for t in tool_chains}
+
+		external_tools = [t.ToolChain() for t in external_tools]
+		external_tools = {t.name() : t for t in external_tools}
 
 		## We just need the SRC_DIR from the root config to get started
 		base_config  = PyConfig.FileConfig(file=".fishmonger", defaults={"SRC_DIR":"src"})
@@ -173,7 +179,14 @@ class FishMonger():
 			## so it doesnt matter which we use
 			tool = tool_chains.keys()[0]
 			for dir in allconfig[tool]:
-				dependencies.append([self.retrieveCode(allconfig[tool_chain][dir]["DEP_DIR"], x, skip_update=allconfig[tool_chain][dir]["SKIP_UPDATE"]) for x in allconfig[tool_chain][dir]["DEPENDENCIES"]])
+				dep_dirs   = [self.retrieveCode(allconfig[tool][dir]["DEP_DIR"], x, skip_update=allconfig[tool][dir]["SKIP_UPDATE"]) for x in allconfig[tool][dir]["DEPENDENCIES"]]
+				after_apps = [x for (x, y) in allconfig[tool][dir]["DEPENDENCIES"]]
+
+				## Update all instances of the app with the build_after app tokens for hte dependencies
+				for ttool in allconfig:
+					allconfig[ttool][dir]["BUILD_AFTER_APPS"].append(after_apps)
+					
+				dependencies.append(dep_dirs)
 		PyLog.decreaseIndent()
 
 		## Find INCLUDE_DIRS
@@ -195,7 +208,7 @@ class FishMonger():
 			[apps.append(self.determineDirTypes(PyPath.makeRelative(d), allconfig[tool])[0]) for d in dependencies]
 	
 		## Determine who uses what
-		to_del = []
+		to_del = PySet.Set()
 		for t_key in allconfig:
 			for a_key in allconfig[t_key]:
 				app   = allconfig[t_key][a_key]
@@ -206,12 +219,20 @@ class FishMonger():
 					continue
 
 				## Update src_dirs to just those this tool will use
-				src_dirs = tool_chains[t_key].uses(app.src_dirs)
+				uses = tool_chains[t_key].uses(app)
 
-				## If there are no src_dirs found this app doesnt use this tool.
-				if src_dirs == []:
+				if not uses:
+					## If there are no src_dirs found this app doesnt use this tool.
 					to_del.append((t_key, a_key))
 					continue
+
+				if t_key in external_tools:
+					## If it's an external tool we only allow it to process this app
+					for tt_key in allconfig:
+						if tt_key == t_key:
+							continue
+						to_del.append((tt_key, a_key))
+
 
 		for (t_key, a_key) in to_del:
 			del allconfig[t_key][a_key]
@@ -232,12 +253,22 @@ class FishMonger():
 				root  = app.root()
 
 				## If we build after a tool we build after all nodes of that tool
+				after_tools = PySet.Set()
 				for t in app["BUILD_AFTER_TOOLS"]:
-					edges.append([(t , allconfig[t][a].name()) for a in allconfig[t]])
+					after_tools.append([(t, allconfig[t][a].name()) for a in allconfig[t]])
+					edges.append(after_tools)
 
 				## If we build after apps we build after them for each tool
 				## Since we're iterating for each tool we'll get to adding those nodes eventually
-				edges.append([(t, a) for a in app["BUILD_AFTER_APPS"] if a in nameconfig[t]])
+				after_apps = PySet.Set()
+				for a in app["BUILD_AFTER_APPS"]:
+					for tt_key in allconfig:
+						if tt_key == t_key:
+							continue
+						for aa_key in allconfig[tt_key]:
+							if allconfig[tt_key][aa_key].name() == a:
+								after_apps.append((tt_key, allconfig[tt_key][aa_key].name()))
+				edges.append(after_apps)
 
 				## Add specific requirements
 				edges.append(app["BUILD_AFTER"])
@@ -245,15 +276,15 @@ class FishMonger():
 				vertexes.append(PyGraph.Vertex((tool, name), edges, data={"tool":tool, "root":root}))
 		
 		## Graph the vertexes
-		digraph = PyGraph.DiGraph(vertexes)
+		digraph    = PyGraph.DiGraph(vertexes)
 		
 		## Get order and strip out values we want
-		orders   = digraph.topologicalOrder()
+		taskorders = digraph.topologicalOrder()
 		## Correct order
-		orders.reverse()
+		taskorders.reverse()
 
 		## build command list
-		self.command_list = [(getattr(tool_chains[digraph[order]["tool"]], action), allconfig[digraph[order]["tool"]][digraph[order]["root"]]) for order in orders]
+		self.command_list = [(getattr(tool_chains[digraph[order]["tool"]], action), allconfig[digraph[order]["tool"]][digraph[order]["root"]]) for order in taskorders]
 
 	def runAction(self):
 		for (action, app) in self.command_list:
@@ -321,7 +352,7 @@ def main():
 
 	fish                = FishMonger()
 
-	tools_for_all       = fishmonger.InternalToolChains + fishmonger.ExternalToolChains
+	tools_for_all       = fishmonger.InternalToolChains
 	
 	actions = {}
 	actions["clean"]    = [(fish.clean, tools_for_all)]
@@ -341,7 +372,7 @@ def main():
 	if cli[0] in actions:
 		tasks = actions[cli[0]]
 		for (task, tools) in tasks:
-			task(tools)
+			task((fishmonger.ExternalToolChains, tools))
 	else:
 		PyLog.output("Usage: fishmonger <clean|build|compile|install|doc|document> [ToolChain[s]]")
 		return 0

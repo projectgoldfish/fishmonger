@@ -4,7 +4,7 @@ def internal():
 
 def external():
 	return [
-#		"rebar"
+		"rebar"
 	]
 
 def generate():

@@ -29,8 +29,10 @@ class ToolChain(object):
 		raise ToolChainException("%s MUST implement init!" % self.__class__)
 
 	## Functions that MAY be implemented, but have default behavior that should be good enough.
-	def uses(self, app_dirs):
+	def uses(self, app):
 		self.name()
+
+		src_dirs          = app.src_dirs
 
 		if not hasattr(self, "defaults"):
 			self.defaults = {}
@@ -40,16 +42,17 @@ class ToolChain(object):
 		elif not isinstance(self.extensions, list):
 			raise ToolChainException("%s MUST define a list of extensions during __init__!" % self.__class__)
 
-		apps = []
-
-		for app_dir in app_dirs:
-			src_files = PyFind.findAllByExtensions(self.extensions, app_dir, root_only=False)
+		srcs = []
+		for src_dir in src_dirs:
+			src_files = PyFind.findAllByExtensions(self.extensions, src_dir, root_only=False)
 			if src_files != []:
 				## Update the tool chain config based on this applications specific toolchain config.				
-				apps.append(app_dir)
+				srcs.append(src_dir)
 		
+		app.src_dirs = srcs
+
 		## Return the list of apps used
-		return apps
+		return srcs != []
 
 	def runAction(self, app, action, function):
 		PyLog.output("%s(%s)" % (self.name(), app.name()))
@@ -60,7 +63,7 @@ class ToolChain(object):
 			cmds = []
 			
 			for child in app.children:
-				t_cmds = function(child)
+				t_cmds = function(child, app)
 				if t_cmds:
 					cmds += t_cmds
 			if not cmds:
@@ -100,31 +103,31 @@ class ToolChain(object):
 		return self.runAction(app, "build", self.buildApp)
 
 	## buildApp is to return a list of strings and functions to call to build the app.
-	def buildApp(self, src_dir, app):
+	def buildApp(self, child, app):
 		raise ToolChainException("%s MUST implement buildApp or override build!" % self.__class__)
 
 	def install(self, app):
 		return self.runAction(app, "install", self.installApp)
 
-	def installApp(self, src_dir, app):
+	def installApp(self, child, app):
 		raise ToolChainException("%s MUST implement installApp or override install!" % self.__class__)
 
 	def document(self, app):
 		return self.runAction(app, "document", self.documentApp)
 
-	def documentApp(self, src_dir, app):
+	def documentApp(self, child, app):
 		raise ToolChainException("%s MUST implement documentApp or override document!" % self.__class__)
 
 	def generate(self, app):
 		return self.runAction(app, "generate", self.generateApp)
 
-	def generateApp(self, src_dir, app):
+	def generateApp(self, child, app):
 		raise ToolChainException("%s MUST implement generateApp or override generate!" % self.__class__)
 
 	def link(self, app):
 		return self.runAction(app, "link", self.linkApp)
 
-	def linkApp(self, src_dir, app):
+	def linkApp(self, child, app):
 		raise ToolChainException("%s MUST implement linkApp or override link!" % self.__class__)
 
 	def name(self):

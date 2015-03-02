@@ -23,7 +23,7 @@ class ToolChain(fishmonger.ToolChain):
 			"EXECUTABLE" : "false"
 		}
 
-	def buildApp(self, app):
+	def buildApp(self, child, app):
 		includes = " "
 		for include in app["INCLUDE_DIRS"]:
 			if include == "":
@@ -33,7 +33,7 @@ class ToolChain(fishmonger.ToolChain):
 		PySH.mkdirs(app.buildDir(subdir="ebin"))
 		return ["erlc " + includes + "-o " + app.buildDir(subdir="ebin") + " " + os.path.join(app.srcDir(), "*.erl")]
 
-	def installApp(self, app):
+	def installApp(self, child, app):
 		## copy binaries
 		install_erl_dir = app.installLangDir("erlang", subdir="ebin", app=True, version=True)
 		PySH.copy(app.buildDir("ebin"), install_erl_dir, force=True)

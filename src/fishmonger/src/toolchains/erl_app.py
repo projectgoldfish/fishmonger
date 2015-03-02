@@ -234,10 +234,10 @@ class ToolChain(fishmonger.ToolChain):
 			}
 		}
 
-	def buildApp(self, app):
+	def buildApp(self, child, app):
 		return [self.genApp]
 
-	def installApp(self, app):
+	def installApp(self, child, app):
 		self.config = app
 		self.installMisc(app)
 
