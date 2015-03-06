@@ -130,6 +130,12 @@ class ToolChain(object):
 	def linkApp(self, child, app):
 		raise ToolChainException("%s MUST implement linkApp or override link!" % self.__class__)
 
+	def package(self, app):
+		return self.runAction(app, "package", self.packageApp)
+
+	def packageApp(self, child, app):
+		raise ToolChainException("%s MUST implement packageApp or override package!" % self.__class__)
+
 	def name(self):
 		if not hasattr(self, "tc_name"):
 			self.tc_name   = self.__module__.split(".")[-1:][0]
@@ -148,6 +154,7 @@ BuildToolChains    = PySet.Set()
 LinkToolChains     = PySet.Set()
 DocumentToolChains = PySet.Set()
 InstallToolChains  = PySet.Set()
+PackageToolChains  = PySet.Set()
 
 def addToolChains(array, target, prefix=""):
 	if prefix != "":
@@ -190,6 +197,10 @@ def addInstallToolChains(array):
 	addToolChains(array, AllToolChains)
 	addToolChains(array, InstallToolChains)
 
+def addPackageToolChains(array):
+	addToolChains(array, AllToolChains)
+	addToolChains(array, PackageToolChains)
+
 addToolChains(fishmonger.toolchains.internal(), InternalToolChains, "fishmonger.toolchains");
 addToolChains(fishmonger.toolchains.external(), ExternalToolChains, "fishmonger.toolchains");
 
@@ -198,6 +209,7 @@ addToolChains(fishmonger.toolchains.build(),    BuildToolChains,    "fishmonger.
 addToolChains(fishmonger.toolchains.link(),     LinkToolChains,     "fishmonger.toolchains");
 addToolChains(fishmonger.toolchains.document(), DocumentToolChains, "fishmonger.toolchains");
 addToolChains(fishmonger.toolchains.install(),  InstallToolChains,  "fishmonger.toolchains");
+addToolChains(fishmonger.toolchains.package(),  PackageToolChains,  "fishmonger.toolchains");
 
 
 

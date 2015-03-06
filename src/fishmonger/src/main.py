@@ -128,6 +128,7 @@ class FishMonger():
 			return
 
 		## [Module] -> [ToolChain]
+		print tool_chains
 		tool_chains    = [t.ToolChain() for t in tool_chains]
 		## [ToolChain] -> {String:ToolChain}
 		tool_chains    = {t.name() : t for t in tool_chains}
@@ -286,6 +287,64 @@ class FishMonger():
 		## build command list
 		self.command_list = [(getattr(tool_chains[digraph[order]["tool"]], action), allconfig[digraph[order]["tool"]][digraph[order]["root"]]) for order in taskorders]
 
+	## We have to detect the applicaiton folders and generate base app
+	## configurations here. Caling doConfigure will fill in the blanks.
+	## Once we do that we can setup the tool chains
+	def packageConfigure(self, tool_chains, action):
+		(external_tools, internal_tools) = tool_chains
+		tool_chains                      = external_tools + internal_tools
+
+		self.command_list = []
+		if tool_chains == []:
+			return
+
+		## [Module] -> [ToolChain]
+		tool_chains    = [t.ToolChain() for t in tool_chains]
+		## [ToolChain] -> {String:ToolChain}
+		tool_chains    = {t.name() : t for t in tool_chains}
+
+		external_tools = [t.ToolChain() for t in external_tools]
+		external_tools = {t.name() : t for t in external_tools}
+
+		## We just need the SRC_DIR from the root config to get started
+		base_config  = PyConfig.FileConfig(file=".fishmonger", defaults={"SRC_DIR":"src"})
+		
+		allconfig    = {}
+		dependencies = PySet.Set(base_config["SRC_DIR"])
+		
+		PyLog.output("Fetching dependencies")
+		PyLog.increaseIndent()
+
+		## We only want to search these out once
+		t_env_config  = PyConfig.FileConfig(file=".fishmonger")
+		t_app_config  = PyConfig.FileConfig(file=".fishmonger.app")
+		
+		tool_config = {}
+		for tool_chain in tool_chains:
+			tool_config[tool_chain] = PyConfig.FileConfig(file=".fishmonger." + tool_chain, config=tool_chains[tool_chain].defaults)
+						
+		for tool_chain in tool_chains:
+			## For every directory merge the configs
+
+			print tool_config[tool_chain]
+			app_config = fishmonger.config.AppToolConfig(
+				".",
+				t_env_config,
+				None,
+				None
+			)
+
+			app_config.children = [1]
+
+			if tool_chains[tool_chain].uses(app_config):
+				allconfig[tool_chain] = app_config
+			
+		PyLog.decreaseIndent()		
+
+		## build command list
+		self.command_list = [(getattr(tool_chains[tool_chain], action), allconfig[tool_chain]) for tool_chain in allconfig]
+
+
 	def runAction(self):
 		for (action, app) in self.command_list:
 			action(app)
@@ -332,6 +391,13 @@ class FishMonger():
 		self.runAction()
 		PyLog.decreaseIndent()
 
+	def package(self, tools):
+		PyLog.output("Packaging")
+		PyLog.increaseIndent()
+		self.packageConfigure(tools, "package")
+		self.runAction()
+		PyLog.decreaseIndent()
+
 def main():
 	cli = PyConfig.CLIConfig()
 
@@ -349,6 +415,7 @@ def main():
 	fishmonger.addLinkToolChains(    cli.get("LINK_TOOL",     []))
 	fishmonger.addInstallToolChains( cli.get("INSTALL_TOOL",  []))
 	fishmonger.addDocumentToolChains(cli.get("DOC_TOOL",      []))
+	fishmonger.addPackageToolChains( cli.get("PACKAGE_TOOL",  []))
 
 	fish                = FishMonger()
 
@@ -367,7 +434,11 @@ def main():
 	actions["install"]  = [(fish.install,  tools_for_all + fishmonger.InstallToolChains)]
 	actions["doc"]      = [(fish.document, tools_for_all + fishmonger.DocumentToolChains)]
 	actions["document"] = actions["doc"]
+	
+	actions["package"]  = [(fish.package,  fishmonger.PackageToolChains)]
+
 	actions["test"]     = [(None, [])]
+
 	
 	if cli[0] in actions:
 		tasks = actions[cli[0]]

@@ -134,10 +134,12 @@ class AppToolConfig(PyConfig.Config):
 		t_env_config.safeMerge(env_config)
 		
 		t_tool_config  = PyConfig.Config(defaults=tool_defaults, allowed=tool_allowed, types=self.types, constants=tool_constants)
-		t_tool_config.safeMerge(tool_config)
+		if tool_config != None:
+			t_tool_config.safeMerge(tool_config)
 		
 		t_app_config   = PyConfig.Config(defaults=app_defaults, allowed=app_allowed, types=self.types, constants=app_constants)
-		t_app_config.safeMerge(app_config)
+		if app_config != None:
+			t_app_config.safeMerge(app_config)
 		
 		self.safeMerge(t_env_config)
 		self.safeMerge(t_tool_config)
@@ -164,6 +166,8 @@ class AppToolConfig(PyConfig.Config):
 		name = os.path.basename(self.src_root)
 		if name == self["SRC_DIR"]:
 			return os.path.basename(os.path.dirname(self.src_root))
+		if name == ".":
+			return os.path.basename(PyPath.makeAbsolute(self.src_root))
 		return name
 
 	def root(self):
@@ -196,11 +200,14 @@ class AppToolConfig(PyConfig.Config):
  		else:
  			return os.path.join(os.path.join(self.dir, subdir), file)
 
-	def buildDir(self, subdir="", file=""):
-		return os.path.join(os.path.join(os.path.join(self.app_root, self["BUILD_DIR"]), subdir), file)
+	def buildDir(self, subdir="", file="", absolute=False):
+		path = os.path.join(os.path.join(os.path.join(self.app_root, self["BUILD_DIR"]), subdir), file)
+		if absolute:
+			path = PyPath.makeAbsolute(path)
+		return path
  		
 	def installDir(self, install=True, **kwargs):
-		args = ["prefix", "base", "suffix", "file"]
+		args = ["prefix", "base", "suffix", "file", "absolute"]
 		return self.getDir(install=True, **PyKWArgs.sanitize(args, **kwargs))
 
 	def installEtcDir(self, subdir="", file="", **kwargs):
@@ -218,6 +225,14 @@ class AppToolConfig(PyConfig.Config):
 	def installVarDir(self, subdir="", file="", **kwargs):
 		args = []
 		return self.getDir(prefix="var", base=subdir, file=file,  install=True, **PyKWArgs.sanitize(args, **kwargs))
+
+	def installLangSubDir(self, lang, subdir="", file="", app=False, **kwargs):
+		name = self.name()
+		if not app:
+			name = ""
+
+		args = ["version", "absolute"]
+		return self.getDir(prefix="lib", base=lang + "/lib/" + name, suffix=subdir, file=file, install=False, **PyKWArgs.sanitize(args, **kwargs))
 
 	def installLangDir(self, lang, subdir="", file="", app=False, **kwargs):
 		name = self.name()

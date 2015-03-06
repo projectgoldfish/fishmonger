@@ -7,8 +7,16 @@ full: fishmonger-libs
 	PYTHONPATH=${PYTHONPATH}:py-libs ./src/fishmonger/src/main.py install
 
 install: fishmonger-libs
+	PYTHONPATH=${PYTHONPATH}:py-libs ./src/fishmonger/src/main.py install --INSTALL_PREFIX ${INSTALL_PREFIX} --SKIP_UPDATE True
+	@sudo ln -s ${INSTALL_PREFIX}/bin/fishmonger /usr/bin/fishmonger
+
+fullinstall: fishmonger-libs
 	PYTHONPATH=${PYTHONPATH}:py-libs ./src/fishmonger/src/main.py install --INSTALL_PREFIX ${INSTALL_PREFIX}	
-	@ln -s ${INSTALL_PREFIX}/bin/fishmonger /usr/bin/fishmonger
+	@sudo ln -s ${INSTALL_PREFIX}/bin/fishmonger /usr/bin/fishmonger
+
+
+package:
+	PYTHONPATH=${PYTHONPATH}:py-libs ./src/fishmonger/src/main.py package
 
 init: clone-libs
 	

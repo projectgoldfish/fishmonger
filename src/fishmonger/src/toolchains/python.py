@@ -24,11 +24,12 @@ class ToolChain(fishmonger.ToolChain):
 			self.installApplication(child)
 
 	def installApplication(self, child):
-		py_lib    = child.installLangDir("python", absolute=True)
-		py_main   = child.installLangDir("python", file=child["APP_OPTIONS"]["PY_MAIN"], app=True, absolute=True)
+		py_lib    = child.installLangSubDir("python", absolute=False)
+		py_main   = child.installLangSubDir("python", file=child["APP_OPTIONS"]["PY_MAIN"], app=True, absolute=False)
 
 		child_code  = "#! /bin/bash\n"
-		child_code += "PYTHONPATH=${PYTHONPATH}:%s python %s $@" % (py_lib, py_main)
+		child_code += "APP_ROOT=${APP_ROOT:-%s}\n" % child.installDir(absolute=True)
+		child_code += "PYTHONPATH=${PYTHONPATH}:${APP_ROOT}/%s python ${APP_ROOT}/%s $@" % (py_lib, py_main)
 
 		file_name = child.installBinDir(file=child.name())
 		file      = PyFile.file(file_name, "w")

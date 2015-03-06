@@ -40,3 +40,9 @@ def document():
 		"jsdoc",
 #		"javadoc"
 	]
+
+def package():
+	return [
+		"deb",
+		"rpm"
+	]
