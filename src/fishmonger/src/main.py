@@ -128,7 +128,6 @@ class FishMonger():
 			return
 
 		## [Module] -> [ToolChain]
-		print tool_chains
 		tool_chains    = [t.ToolChain() for t in tool_chains]
 		## [ToolChain] -> {String:ToolChain}
 		tool_chains    = {t.name() : t for t in tool_chains}
@@ -326,7 +325,6 @@ class FishMonger():
 		for tool_chain in tool_chains:
 			## For every directory merge the configs
 
-			print tool_config[tool_chain]
 			app_config = fishmonger.config.AppToolConfig(
 				".",
 				t_env_config,

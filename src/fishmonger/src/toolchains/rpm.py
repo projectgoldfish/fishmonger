@@ -62,7 +62,7 @@ class ToolChain(fishmonger.ToolChain):
 			file_name = os.path.join(package_bin, name)
 			f         = PyFile.file(file_name, "w")
 
-			code      = "#! bin/bash\n"
+			code      = "#! /bin/bash\n"
 			code     += "APP_ROOT=${APP_ROOT:-%s} %s $@\n" % ("/usr/local/%s" % app.name(), "/usr/local/%s/bin/%s" % (app.name(), name)) 
 
 			f.write(code)

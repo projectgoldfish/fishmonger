@@ -212,7 +212,6 @@ class ToolChain(fishmonger.ToolChain):
 				expressions.appendChild(terms)
 
 		doc.appendChild(expressions)
-		print config_file
 
 		PyErl.write_file(config_file, doc)
 

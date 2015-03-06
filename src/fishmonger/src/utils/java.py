@@ -27,4 +27,4 @@ def getClassPath(apps):
 			class_path.append(os.path.dirname(file))
 		for dir in PyFind.findAllByExtension("java", app.srcDir()):
 			class_path.append(os.path.dirname(file))
-	print class_path
+	
