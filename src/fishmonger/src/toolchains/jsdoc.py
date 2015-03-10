@@ -15,7 +15,6 @@ class ToolChain(fishmonger.ToolChain):
 	def __init__(self):
 		self.extensions = ["js"]
 		self.defaults   = {
-			"BUILD_DIR"  : "js"
 		}
 
 	def documentApp(self, app):

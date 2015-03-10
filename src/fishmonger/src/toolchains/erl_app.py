@@ -146,7 +146,7 @@ class ToolChain(fishmonger.ToolChain):
 		install_dir = app.installDir("")
 
 		cookie_file = app.installVarDir(subdir="run", file=".cookie", version=False)
-		file_name   = app.installBinDir(file=app_name)
+		file_name   = app.installBinDir(file=app_name + "-connect")
 		erl_dirs    = app.installLibDir(subdir="erlang/lib/")
 
 		file        = PyFile.file(file_name, "w")
@@ -161,7 +161,7 @@ class ToolChain(fishmonger.ToolChain):
 		install_dir = app.installDir("")
 
 		cookie_file = app.installVarDir(subdir="run", file=".cookie", version=False)
-		file_name   = app.installBinDir(file=app_name)
+		file_name   = app.installBinDir(file=app_name + "-env")
 		erl_dirs    = app.installLibDir(subdir="erlang/lib/")
 		config_file = app.installEtcDir(file=app_name+".config")
 

@@ -19,7 +19,6 @@ class ToolChain(fishmonger.ToolChain):
 	def __init__(self):
 		self.extensions = ["erl"]
 		self.defaults   = {
-			"BUILD_DIR"  : "ebin",
 			"EXECUTABLE" : "false"
 		}
 
