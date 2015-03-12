@@ -19,7 +19,6 @@ class ToolChain(fishmonger.ToolChain):
 	def __init__(self):
 		self.extensions = ["erl"]
 		self.defaults   = {
-			"EXECUTABLE" : "false"
 		}
 
 	def buildApp(self, child, app):

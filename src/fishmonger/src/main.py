@@ -182,9 +182,12 @@ class FishMonger():
 				dep_dirs   = [self.retrieveCode(allconfig[tool][dir]["DEP_DIR"], x, skip_update=allconfig[tool][dir]["SKIP_UPDATE"]) for x in allconfig[tool][dir]["DEPENDENCIES"]]
 				after_apps = [x for (x, y) in allconfig[tool][dir]["DEPENDENCIES"]]
 
-				## Update all instances of the app with the build_after app tokens for hte dependencies
-				for ttool in allconfig:
-					allconfig[ttool][dir]["BUILD_AFTER_APPS"].append(after_apps)
+				## Update all instances of the app with the build_after app tokens for the dependencies
+				##
+				## THIS IS BROKEN: Leave commented out until it can be properly reworked.
+				## Have apps declare their own BUILD_AFTER_APPS for now
+				##for ttool in allconfig:
+				##	allconfig[ttool][dir]["BUILD_AFTER_APPS"].append(after_apps)
 					
 				dependencies.append(dep_dirs)
 		PyLog.decreaseIndent()
@@ -254,24 +257,32 @@ class FishMonger():
 
 				## If we build after a tool we build after all nodes of that tool
 				after_tools = PySet.Set()
+
+				#print "\nNODES", t_key, a_key
 				for t in app["BUILD_AFTER_TOOLS"]:
 					after_tools.append([(t, allconfig[t][a].name()) for a in allconfig[t]])
 					edges.append(after_tools)
+				#print "TOOLS:", after_tools
+				edges.append(after_tools)
 
 				## If we build after apps we build after them for each tool
 				## Since we're iterating for each tool we'll get to adding those nodes eventually
 				after_apps = PySet.Set()
 				for a in app["BUILD_AFTER_APPS"]:
-					for tt_key in allconfig:
-						if tt_key == t_key:
-							continue
-						for aa_key in allconfig[tt_key]:
-							if allconfig[tt_key][aa_key].name() == a:
-								after_apps.append((tt_key, allconfig[tt_key][aa_key].name()))
+					## We may be told to build after ourself...
+					## Don't do that
+					if a == name:
+						continue
+					for aa_key in allconfig[t_key]:
+						if allconfig[t_key][aa_key].name() == a:
+							after_apps.append((t_key, allconfig[t_key][aa_key].name()))
+				#print "APPS:", after_apps, app["BUILD_AFTER_APPS"]
 				edges.append(after_apps)
 
 				## Add specific requirements
 				edges.append(app["BUILD_AFTER"])
+
+				#print "EDGES", edges
 
 				vertexes.append(PyGraph.Vertex((tool, name), edges, data={"tool":tool, "root":root}))
 		
@@ -282,7 +293,7 @@ class FishMonger():
 		taskorders = digraph.topologicalOrder()
 		## Correct order
 		taskorders.reverse()
-
+	
 		## build command list
 		self.command_list = [(getattr(tool_chains[digraph[order]["tool"]], action), allconfig[digraph[order]["tool"]][digraph[order]["root"]]) for order in taskorders]
 

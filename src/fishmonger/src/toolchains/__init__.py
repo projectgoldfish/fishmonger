@@ -30,6 +30,7 @@ def install():
 		"python",
 		"erlc",
 		"erl_app",
+		"erl_misc"
 #		"jar",
 #		"java_app"
 	]
