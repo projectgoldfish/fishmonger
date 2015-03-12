@@ -33,7 +33,7 @@ class ErlApp(object):
 		modules_tuple = PyErl.term("{modules, []}.")
 
 		for mod in PyFind.findAllByPattern("*erl", self.app.srcDir()):
-			(mod, x) = os.path.splitext(mod)
+			(mod, x) = os.path.splitext(os.path.basename(mod))
 			modules_tuple[1].appendChild(PyErl.PyErlString(mod))
 		arg_list.appendChild(modules_tuple)
 

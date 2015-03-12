@@ -19,8 +19,8 @@ class ToolChain(fishmonger.ToolChain):
 	## get it's apps as well.
 	## If we don't assume it's a native app.
 	def getApps(self, app):
-		apps = []
-		app_file = PyFind.find(app + ".app", self.config["INSTALL_PREFIX"])
+		apps     = []
+		app_file = PyFind.find("*" + app + ".app", self.config.installDir())
 		if not app_file:
 			app_file = PyFind.find(app + ".app", "/usr/lib/erlang") ## Search in a nix install
 			if not app_file:
