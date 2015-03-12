@@ -31,9 +31,9 @@ class ToolChain(fishmonger.ToolChain):
 
 	def documentApp(self, child, app):
 		for app in self.apps:
-			PyUtil.shell("cd " + app.appDir() + " && rebar doc")
+			PySH.cmd("cd " + app.appDir() + " && rebar doc")
 			doc_dir = app.installDocDir("erlang")
-			PyFind.copytree(os.path.join(app.appDir(), "doc"), doc_dir, force=True)
+			PySH.copy(app.appDir(subdir="doc"), doc_dir, force=True)
 
 	def installApp(self, child, app):
 		for dir in ["ebin", "priv"]:

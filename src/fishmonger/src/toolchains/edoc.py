@@ -12,10 +12,9 @@ class ToolChain(fishmonger.ToolChain):
 		self.extensions = ["erl"]
 		self.defaults   = {}
 
-	def documentApp(self, app):
-		doc_dir = app.installDocDir("erlang")
-		if os.path.isdir(doc_dir):
-			shutil.rmtree(doc_dir)
-		os.makedirs(doc_dir)
+	def documentApp(self, child, app):
+		doc_dir = child.installDocDir("erlang")
+		
+		PySH.mkdirs(doc_dir)
 
-		PySH.cmd("erl -noshell -run edoc_run application '" + app.name() + "' '\"" + app.appDir() + "\"' '[{dir, \"" + doc_dir + "\"}]'", prefix=PyLog.indent, stdout=True, stderr=True)
+		return ["erl -noshell -run edoc_run application '" + app.name() + "' '\"" + app.appDir() + "\"' '[{dir, \"" + doc_dir + "\"}]'"]
