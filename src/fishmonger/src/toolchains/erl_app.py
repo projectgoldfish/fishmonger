@@ -90,6 +90,7 @@ class ToolChain(fishmonger.ToolChain):
 	def __init__(self):
 		self.extensions = ["erl"]
 		self.defaults   = {
+			"BUILD_AFTER_TOOLS" : ["rebar"],
 			"TOOL_OPTIONS"      : {
 				"ERL_MAIN"      : "",
 				"EXECUTABLE"    : False
