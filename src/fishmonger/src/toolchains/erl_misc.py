@@ -24,10 +24,10 @@ class ToolChain(fishmonger.ToolChain):
 		apps        = FishErl.getRequiredApps(app.name(), app.installDir())
 		for tapp in apps:
 			start_apps += "-eval \"application:start(" + tapp + ")\" "
-		cookie_file = app.installVarDir(subdir="run", file=".cookie", version=False)
+		cookie_file = app.installVarDir(subdir="run", file=".cookie", version=False, absolute=True)
 		file_name   = app.installBinDir(file=app_name)
-		erl_dirs    = app.installLibDir(subdir="erlang/lib/")
-		config_file = app.installEtcDir(file=app_name+".erl_config")
+		erl_dirs    = app.installLibDir(subdir="erlang/lib/", absolute=True)
+		config_file = app.installEtcDir(file=app_name+".erl_config", absolute=True)
 
 		file        = PyFile.file(file_name, "w")
 		file.write("#! /bin/bash\n")
@@ -41,9 +41,9 @@ class ToolChain(fishmonger.ToolChain):
 		app_name    = app.name()
 		install_dir = app.installDir("")
 
-		cookie_file = app.installVarDir(subdir="run", file=".cookie", version=False)
+		cookie_file = app.installVarDir(subdir="run", file=".cookie", version=False, absolute=True)
 		file_name   = app.installBinDir(file=app_name + "-connect")
-		erl_dirs    = app.installLibDir(subdir="erlang/lib/")
+		erl_dirs    = app.installLibDir(subdir="erlang/lib/", absolute=True)
 
 		file        = PyFile.file(file_name, "w")
 		file.write("#! /bin/bash\n")
@@ -56,10 +56,10 @@ class ToolChain(fishmonger.ToolChain):
 		app_name    = app.name()
 		install_dir = app.installDir("")
 
-		cookie_file = app.installVarDir(subdir="run", file=".cookie", version=False)
+		cookie_file = app.installVarDir(subdir="run", file=".cookie", version=False, absolute=True)
 		file_name   = app.installBinDir(file=app_name + "-env")
-		erl_dirs    = app.installLibDir(subdir="erlang/lib/")
-		config_file = app.installEtcDir(file=app_name+".erl_config")
+		erl_dirs    = app.installLibDir(subdir="erlang/lib/", absolute=True)
+		config_file = app.installEtcDir(file=app_name+".erl_config", absolute=True)
 
 		file        = PyFile.file(file_name, "w")
 		file.write("#! /bin/bash\n")
@@ -91,6 +91,12 @@ class ToolChain(fishmonger.ToolChain):
 		PySH.cmd("chmod a-w "  + cookie_file)
 		PySH.cmd("chmod og-r " + cookie_file)
 
+	def genDirs(self, app):
+		log_dir = app.installVarDir(subdir="log", version=False, absolute=True)
+
+		if not os.path.isdir(log_dir):
+			PySH.mkdirs(log_dir)
+
 	def installMisc(self, app):
 		var_dir         = app.appDir("var")
 		install_var_dir = app.installVarDir()
@@ -112,7 +118,7 @@ class ToolChain(fishmonger.ToolChain):
 		self.config = app
 		self.installMisc(app)
 
-		main_steps = [self.genShellScript, self.genShellEnvScript, self.genShellConnectScript, self.genCookie]
+		main_steps = [self.genShellScript, self.genShellEnvScript, self.genShellConnectScript, self.genCookie, self.genDirs]
 		if app.name() == app["TOOL_OPTIONS"]["ERL_MAIN"] or ("EXECUTABLE" in app["APP_OPTIONS"] and app["APP_OPTIONS"]["EXECUTABLE"] == True):
 			for step in main_steps:
 				step(app)

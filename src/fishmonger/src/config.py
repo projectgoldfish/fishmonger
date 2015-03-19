@@ -211,19 +211,19 @@ class AppToolConfig(PyConfig.Config):
 		return self.getDir(install=True, **PyKWArgs.sanitize(args, **kwargs))
 
 	def installEtcDir(self, subdir="", file="", **kwargs):
-		args = []
+		args = ["absolute"]
 		return self.getDir(prefix="etc", base=subdir, file=file, install=True, **PyKWArgs.sanitize(args, **kwargs))
 
 	def installBinDir(self, subdir="", file="", **kwargs):
-		args = []
+		args = ["absolute"]
 		return self.getDir(prefix="bin", base=subdir, file=file,  install=True, **PyKWArgs.sanitize(args, **kwargs))
 
 	def installLibDir(self, subdir="", file="", **kwargs):
-		args = []
+		args = ["absolute"]
 		return self.getDir(prefix="lib", base=subdir, file=file,  install=True, **PyKWArgs.sanitize(args, **kwargs))
 
 	def installVarDir(self, subdir="", file="", **kwargs):
-		args = []
+		args = ["absolute"]
 		return self.getDir(prefix="var", base=subdir, file=file,  install=True, **PyKWArgs.sanitize(args, **kwargs))
 
 	def installLangSubDir(self, lang, subdir="", file="", app=False, **kwargs):
@@ -243,7 +243,7 @@ class AppToolConfig(PyConfig.Config):
 		return self.getDir(prefix="lib", base=lang + "/lib/" + name, suffix=subdir, file=file, install=True, **PyKWArgs.sanitize(args, **kwargs))
 
 	def installDocDir(self, lang, subdir="", file="", app=None, version=True, **kwargs):
-		args = []
+		args = ["absolute"]
 		return self.getDir(prefix="doc/" + lang, base=self.name(), install=True, version=version, **PyKWArgs.sanitize(args, **kwargs))
 
 class ConfigMap():

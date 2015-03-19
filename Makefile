@@ -11,8 +11,7 @@ install: fishmonger-libs
 
 fullinstall: fishmonger-libs
 	PYTHONPATH=${PYTHONPATH}:py-libs ./src/fishmonger/src/main.py install --INSTALL_PREFIX ${INSTALL_PREFIX}	
-	@sudo ln -s ${INSTALL_PREFIX}/bin/fishmonger /usr/bin/fishmonger
-
+	@-sudo ln -s ${INSTALL_PREFIX}/bin/fishmonger /usr/bin/fishmonger
 
 package: install
 	PYTHONPATH=${PYTHONPATH}:py-libs ./src/fishmonger/src/main.py package

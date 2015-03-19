@@ -21,8 +21,8 @@ class ToolChain(fishmonger.ToolChain):
 		config_file = app.installEtcDir(file=app.name()+".erl_config.default")
 		apps        = FishErl.getRequiredApps(app.name(), app.installDir())
 
-		for app in apps:
-			app_config = PyFind.find("*/" + app + ".erl_config", ".")
+		for t_app in apps:
+			app_config = PyFind.find("*/" + t_app + ".erl_config", ".")
 			if app_config and os.path.isfile(app_config):
 				terms = PyErl.parse_file(app_config)
 				expressions.appendChild(terms)
