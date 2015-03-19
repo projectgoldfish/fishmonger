@@ -30,7 +30,8 @@ def install():
 		"python",
 		"erlc",
 		"erl_app",
-		"erl_misc"
+		"erl_misc",
+		"erl_config"
 #		"jar",
 #		"java_app"
 	]
@@ -44,6 +45,6 @@ def document():
 
 def package():
 	return [
-		"deb",
+#		"deb",
 		"rpm"
 	]

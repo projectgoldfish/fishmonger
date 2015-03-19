@@ -12,52 +12,22 @@ import os.path
 import shutil
 
 import fishmonger
+import fishmonger.utils.erl as FishErl
 
 class ToolChain(fishmonger.ToolChain):	
-	## Look at the applications entry of the app.
-	## If we have app.app in our intall directory then
-	## get it's apps as well.
-	## If we don't assume it's a native app.
-	def getApps(self, app):
-		apps     = []
-		app_file = PyFind.find("*" + app + ".app", self.config.installDir())
-		if not app_file:
-			app_file = PyFind.find(app + ".app", "/usr/lib/erlang") ## Search in a nix install
-			if not app_file:
-				app_file = PyFind.find(app + ".app", "/usr/local/lib/erlang") ## Search in an OSX install
-				if not app_file:
-					return [app]
-
-		(doc, ) = PyErl.parse_file(app_file),
-		tuples = doc.getElementsByTagName("tuple")
-		tuple = None
-		for ttuple in tuples:
-			if ttuple[0].to_string() == "applications":
-				tuple = ttuple
-				break
-		if tuple == None:
-			return [app]
-		for dapp in tuple[1]:
-			tapps = self.getApps(dapp.to_string())
-			for tapp in tapps:
-				if not tapp in apps:
-					 apps.append(tapp)
-		apps.append(app)
-		return apps
-
 	## gen_shell_script(dict()) -> None
 	## Generates a shell script that will start the system
 	## or attach to a runnign node.
 	def genShellScript(self, app):
 		app_name    = app.name()
 		start_apps  = ""
-		apps        = self.getApps(app.name())
+		apps        = FishErl.getRequiredApps(app.name(), app.installDir())
 		for tapp in apps:
 			start_apps += "-eval \"application:start(" + tapp + ")\" "
 		cookie_file = app.installVarDir(subdir="run", file=".cookie", version=False)
 		file_name   = app.installBinDir(file=app_name)
 		erl_dirs    = app.installLibDir(subdir="erlang/lib/")
-		config_file = app.installEtcDir(file=app_name+".config")
+		config_file = app.installEtcDir(file=app_name+".erl_config")
 
 		file        = PyFile.file(file_name, "w")
 		file.write("#! /bin/bash\n")
@@ -89,7 +59,7 @@ class ToolChain(fishmonger.ToolChain):
 		cookie_file = app.installVarDir(subdir="run", file=".cookie", version=False)
 		file_name   = app.installBinDir(file=app_name + "-env")
 		erl_dirs    = app.installLibDir(subdir="erlang/lib/")
-		config_file = app.installEtcDir(file=app_name+".config")
+		config_file = app.installEtcDir(file=app_name+".erl_config")
 
 		file        = PyFile.file(file_name, "w")
 		file.write("#! /bin/bash\n")
@@ -121,26 +91,6 @@ class ToolChain(fishmonger.ToolChain):
 		PySH.cmd("chmod a-w "  + cookie_file)
 		PySH.cmd("chmod og-r " + cookie_file)
 
-	def genConfigFile(self, app):
-		doc         = PyErl.PyErlDocument()
-		expressions = PyErl.PyErlList()
-		config_file = app.installEtcDir(file=app.name()+".config.default")
-		apps        = self.getApps(app.name())
-
-		PyLog.output("Generating config...")
-
-		for app in self.apps:
-			if app.name() not in apps:
-				continue
-			app_config = app.installEtcDir(file=app.name()+".config")
-			if os.path.isfile(app_config):
-				terms = PyErl.parse_file(app_config)
-				expressions.appendChild(terms)
-
-		doc.appendChild(expressions)
-
-		PyErl.write_file(config_file, doc)
-
 	def installMisc(self, app):
 		var_dir         = app.appDir("var")
 		install_var_dir = app.installVarDir()
@@ -162,7 +112,7 @@ class ToolChain(fishmonger.ToolChain):
 		self.config = app
 		self.installMisc(app)
 
-		main_steps = [self.genShellScript, self.genShellEnvScript, self.genShellConnectScript, self.genConfigFile, self.genCookie]
+		main_steps = [self.genShellScript, self.genShellEnvScript, self.genShellConnectScript, self.genCookie]
 		if app.name() == app["TOOL_OPTIONS"]["ERL_MAIN"] or ("EXECUTABLE" in app["APP_OPTIONS"] and app["APP_OPTIONS"]["EXECUTABLE"] == True):
 			for step in main_steps:
 				step(app)
