@@ -144,8 +144,6 @@ class ToolChain(object):
 	def getApps(self):
 		return [app.name() for app in self.apps]
 
-AllToolChains      = {}
-
 InternalToolChains = PySet.Set()
 ExternalToolChains = PySet.Set()
 
@@ -157,6 +155,9 @@ InstallToolChains  = PySet.Set()
 PackageToolChains  = PySet.Set()
 
 def addToolChains(array, target, prefix=""):
+	if isinstance(array, basestring):
+		array = [array]
+
 	if prefix != "":
 		prefix += "."
 
@@ -165,40 +166,28 @@ def addToolChains(array, target, prefix=""):
 		modules.append(prefix + c)
 	PyUtil.loadModules(modules, target)
 
-	tmp = AllToolChains
-	for c in array:
-		exec("tmp[\"" + c + "\"] = " + prefix + c)
-
 def addInternalToolChains(array):
-	addToolChains(array, AllToolChains)
 	addToolChains(array, InternalToolChains)
 	
 def addExternalToolChains(array):
-	addToolChains(array, AllToolChains)
 	addToolChains(array, ExternalToolChains)
 	
 def addGenerateToolChains(array):
-	addToolChains(array, AllToolChains)
 	addToolChains(array, GenerateToolChains)
 
 def addBuildToolChains(array):
-	addToolChains(array, AllToolChains)
 	addToolChains(array, BuildToolChains)
 
 def addLinkToolChains(array):
-	addToolChains(array, AllToolChains)
 	addToolChains(array, LinkToolChains)
 
 def addDocumentToolChains(array):
-	addToolChains(array, AllToolChains)
 	addToolChains(array, DocumentToolChains)
 
 def addInstallToolChains(array):
-	addToolChains(array, AllToolChains)
 	addToolChains(array, InstallToolChains)
 
 def addPackageToolChains(array):
-	addToolChains(array, AllToolChains)
 	addToolChains(array, PackageToolChains)
 
 addToolChains(fishmonger.toolchains.internal(), InternalToolChains, "fishmonger.toolchains");
