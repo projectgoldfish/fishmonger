@@ -18,7 +18,8 @@ def build():
 		"erlc",
 #		"jscc",
 		"erl_app",
-#		"javac"
+		"javac",
+		#"scalac"
 	]
 
 def link():
@@ -31,7 +32,10 @@ def install():
 		"erlc",
 		"erl_app",
 		"erl_misc",
-		"erl_config"
+		"erl_config",
+		"javac",
+		#"scalac",
+		#"scala_app"
 #		"jar",
 #		"java_app"
 	]

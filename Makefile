@@ -1,20 +1,20 @@
 INSTALL_PREFIX=install
 
 all: fishmonger-libs
-	PYTHONPATH=${PYTHONPATH}:py-libs ./src/fishmonger/src/main.py install --SKIP_UPDATE True
+	PYTHONPATH=${PYTHONPATH}:py-libs python ./src/fishmonger/src/main.py install --SKIP_UPDATE True
 
 full: fishmonger-libs
-	PYTHONPATH=${PYTHONPATH}:py-libs ./src/fishmonger/src/main.py install
+	PYTHONPATH=${PYTHONPATH}:py-libs python ./src/fishmonger/src/main.py install
 
 install: fishmonger-libs
-	PYTHONPATH=${PYTHONPATH}:py-libs ./src/fishmonger/src/main.py install --INSTALL_PREFIX ${INSTALL_PREFIX} --SKIP_UPDATE True
+	PYTHONPATH=${PYTHONPATH}:py-libs python ./src/fishmonger/src/main.py install --INSTALL_PREFIX ${INSTALL_PREFIX} --SKIP_UPDATE True
 
 fullinstall: fishmonger-libs
-	PYTHONPATH=${PYTHONPATH}:py-libs ./src/fishmonger/src/main.py install --INSTALL_PREFIX ${INSTALL_PREFIX}	
+	PYTHONPATH=${PYTHONPATH}:py-libs python ./src/fishmonger/src/main.py install --INSTALL_PREFIX ${INSTALL_PREFIX}	
 	@-sudo ln -s ${INSTALL_PREFIX}/bin/fishmonger /usr/bin/fishmonger
 
 package: install
-	PYTHONPATH=${PYTHONPATH}:py-libs ./src/fishmonger/src/main.py package
+	PYTHONPATH=${PYTHONPATH}:py-libs python ./src/fishmonger/src/main.py package
 
 init: clone-libs
 	

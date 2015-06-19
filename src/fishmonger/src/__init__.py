@@ -1,5 +1,6 @@
 import fishmonger.config
 import fishmonger.toolchains
+import fishmonger.dirflags as DF
 
 import os
 import os.path
@@ -32,7 +33,7 @@ class ToolChain(object):
 	def uses(self, app):
 		self.name()
 
-		src_dirs          = app.src_dirs
+		PyLog.debug("Determining usage", app.path(DF.source|DF.src), log_level=5)
 
 		if not hasattr(self, "defaults"):
 			self.defaults = {}
@@ -42,30 +43,36 @@ class ToolChain(object):
 		elif not isinstance(self.extensions, list):
 			raise ToolChainException("%s MUST define a list of extensions during __init__!" % self.__class__)
 
-		srcs = []
-		for src_dir in src_dirs:
-			src_files = PyFind.findAllByExtensions(self.extensions, src_dir, root_only=False)
-			if src_files != []:
-				## Update the tool chain config based on this applications specific toolchain config.				
-				srcs.append(src_dir)
-		
-		app.src_dirs = srcs
+		src_configs = []
+		for child in [app] + app.children:
+			PyLog.debug("Looking in", child.path(DF.source|DF.src), log_level=6)
 
+			src_files = PyFind.findAllByExtensions(self.extensions, child.path(DF.source|DF.src), root_only=False)
+			PyLog.debug("Found Files", src_files, log_level=6)
+			if len(src_files) != 0:
+				## Update the tool chain config based on this applications specific toolchain config.				
+				src_configs.append(child)
+		
 		## Return the list of apps used
-		return srcs != []
+		return src_configs
 
 	def runAction(self, app, action, function):
-		PyLog.output("%s(%s)" % (self.name(), app.name()))
+		PyLog.log("%s(%s)" % (self.name(), app.name()))
+		PyLog.debug("%s(%s)[%s]" % (self.name(), app.name(), app._dir), log_level=6)
+
 		PyLog.increaseIndent()
 	
-		PySH.mkdirs(app.buildDir())
 		try:
 			cmds = []
 			
-			for child in app.children:
+			## If no children but we're being built
+			## We must just be a shallow app.
+			for child in [app] + app.children:
 				t_cmds = function(child, app)
+				PyLog.debug("Returned", t_cmds, log_level=6)
 				if t_cmds:
 					cmds += t_cmds
+		
 			if not cmds:
 				PyLog.decreaseIndent()
 				return True
@@ -73,24 +80,24 @@ class ToolChain(object):
 				if hasattr(cmd, "__call__"):
 					cmd(app)
 				elif isinstance(cmd, basestring):
-					if PySH.cmd(cmd, prefix=PyLog.indent, stdout=True, stderr=True) != 0:
+					if PySH.cmd(cmd, stdout=True, stderr=True) != 0:
 						raise ToolChainException("Failure while performing action", action=action, app=app, cmd=cmd)
 				else:
 					raise ToolChainException("Invalid %s cmd. Cmds must be string or fun: %s : %s" % (action, app, cmd))
 
 		except PyExcept.BaseException as e:
 			PyLog.increaseIndent()
-			PyLog.output(e)
+			PyLog.error(e)
 			PyLog.decreaseIndent()
 			PyLog.decreaseIndent()
 			return False
 		except Exception as e:
 			et, ei, tb = sys.exc_info()
-			PyLog.output("Error during %s" % action, exception=str(e))
+			PyLog.error("Error during %s" % action, exception=str(e))
 			PyLog.increaseIndent()
 			for line in traceback.format_tb(tb):
 				for t_line in line.strip().split("\n"):
-					PyLog.output(t_line)
+					PyLog.error(t_line)
 			PyLog.decreaseIndent()
 			PyLog.decreaseIndent()
 			return False

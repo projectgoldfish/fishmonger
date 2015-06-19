@@ -1,6 +1,8 @@
 import pyerl       as PyErl
 import pybase.find as PyFind
 
+AppRequirements = {}
+
 ## Look at the applications entry of the app.
 ## If we have app.app in our intall directory then
 ## get it's apps as well.
@@ -8,6 +10,9 @@ import pybase.find as PyFind
 def getRequiredApps(app, install_dir="."):
 	apps     = []
 	
+	if app in AppRequirements:
+		return AppRequirements[app]
+
 	app_file = None
 	for search_dir in [install_dir] + ["/usr/lib/erlang", "/usr/lib64/erlang", "/usr/local/lib/erlang"]:
 		app_file = PyFind.find("*/" + app + ".app", search_dir)
@@ -32,4 +37,5 @@ def getRequiredApps(app, install_dir="."):
 			if not tapp in apps:
 				 apps.append(tapp)
 	apps.append(app)
+	AppRequirements[app] = apps
 	return apps

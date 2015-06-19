@@ -1,10 +1,12 @@
-#! /usr/bin/python
 import os
 import sys
 
+import copy
+
 import fishmonger
 
-import fishmonger.config
+import fishmonger.config   as FC
+import fishmonger.dirflags as DF
 
 import pygraph       as PyGraph
 
@@ -18,6 +20,9 @@ import pybase.log    as PyLog
 import pybase.path   as PyPath
 
 import pyrcs         as PyRCS
+
+if sys.version_info < (2, 7):
+	raise "Requires python 2.7+"
 
 class FishMongerException(Exception):
 	pass
@@ -39,253 +44,237 @@ class FishMonger():
 
 		self.command_list     = []
 
-		self.root_config      = PyConfig.Config(defaults=defaults, types=types)
-		self.root_config.merge(PyConfig.SysConfig())
-		self.root_config.merge(PyConfig.CLIConfig())
-
-
 	def retrieveCode(self, target, codebase, skip_update=False):
 		(name, url) = codebase
-		target_dir  = os.path.join(target, name)
+		target_dir  = PyPath.makeRelative(os.path.join(target, name))
 		
 		if name not in self.updated_repos:
 			self.updated_repos[name] = True
 			if not os.path.isdir(target_dir):
-				PyLog.output("Fetching", name)
+				PyLog.log("Fetching", name)
 				PyRCS.clone(url, target_dir)
 			else:
 				if not skip_update:
-					PyLog.output("Updating", name)
+					PyLog.log("Updating", name)
 					PyRCS.update(target_dir)
 				else:
-					PyLog.output("Skipping", name)
+					PyLog.log("Skipping", name)
 		
 		return target_dir
 
-	## Updates the config map so apps point to eaach other
-	## and know of thier source directories
-	def determineDirTypes(self, root, config_map):
-
-		config     = config_map[root]
-
-		dirs       = []
-		src_dir    = os.path.join(root, config["SRC_DIR"])
-		if os.path.isdir(src_dir):
-			dirs   = PyFind.getDirDirs(src_dir)
-			if dirs == []:
-				dirs = [src_dir]
-		else:
-			dirs   = PyFind.getDirDirs(root)
+	def findAppDirs(self, parent=None, root=".", app_dirs=[]):
+		app_dirs.append((parent, root))
+		src_dir = os.path.join(root, "src")
+		PyLog.debug("Finding app dirs in ", src_dir, log_level=6)
 		
-		f_all      = PySet.Set()
-		f_apps     = PySet.Set()
-		f_sources  = PySet.Set()
-
-		for dir in dirs:
-			(all_apps, apps, sources) = self.determineDirTypes(dir, config_map)
-
-			f_all      += all_apps
-			f_apps     += apps
-			f_sources  += sources
-
-		if f_apps != []:
-			## We are parent to apps.
-			for f_app in f_apps:
-				config_map[f_app].parent = config
-			config_map[root].children    = [config_map[t] for t in f_sources]
-			config_map[root].src_dirs    = list(f_sources)
-			return (f_all + [root] + f_apps, [root], PySet.Set())
-		elif f_sources != []:
-			if os.path.isdir(src_dir):
-				## We have a SRC_DIR! We are definitely an app
-				config_map[root].children =  [config_map[t] for t in f_sources + [src_dir]]
-				config_map[root].src_dirs = list(f_sources)
-
-				## Tag the src_roots
-				for child in config_map[root].children:
-					child.app_root = os.path.dirname(src_dir)
-					child.src_root = src_dir
-
-				return (f_all + [root], [root], PySet.Set())
-			else:
-				## No SRC_DIR we're another source dir
-				return (f_all, f_apps,  f_sources + [root])
-		elif f_apps == [] and f_sources == []:
-			## We're just a lowly SRC_DIR
-			return (PySet.Set(), PySet.Set(), [root])
+		nparent = root
+		dirs    = []
+		if os.path.isdir(src_dir):
+			dirs = PyFind.getDirDirs(src_dir)
 		else:
-			raise FishMongerException("Problem parsing directory types: " + root)
+			nparent = parent
+			dirs    = PyFind.getDirDirs(root)
+
+		PyLog.debug("Found app dirs", dirs, log_level=8)
+		for d in dirs:
+			if os.path.basename(d)[0] != ".":
+				self.findAppDirs(nparent, d, app_dirs)
+
+		return app_dirs
+
+	def configure(self, tool_chains):
+		## [Module] -> [ToolChain]
+		tool_chains    = [t.ToolChain() for t in tool_chains]
+		## [ToolChain] -> {String:ToolChain}
+		tool_chains    = {t.name() : t  for t in tool_chains}
+
+		## [ToolChain] -> {String:{}}
+		allconfig      = {t : {}        for t in tool_chains}
+
+		## Get the app directories
+		app_dirs       = self.findAppDirs(None, ".", PySet.Set())
+
+		## parent dir -> [child_dir]
+		children       = {}
+
+		## Examine the directories and determine which tools are used
+		## At the same time link children to parents
+		file_config  = {}
+		env_config   = {}
+		tool_config  = {t : {} for t in tool_chains}
+		app_config   = {}
+		include_dirs = PySet.Set()
+		lib_dirs     = PySet.Set()
+		for (parent, child) in app_dirs:
+			include_dirs.append(PyFind.findAllByPattern("*include*", root=child, dirs_only=True))
+			lib_dirs.append(    PyFind.findAllByPattern("*lib*",     root=child, dirs_only=True))
+
+			t_env_config  = {}
+			t_app_config  = {}
+			if child not in children:
+				children[child] = []
+			if parent in children:
+				children[parent].append(child)
+				t_app_config = app_config[parent] 
+				t_env_config = env_config[parent] 
+
+			for tool in tool_chains:
+				nenv_config  = file_config[os.path.join(child, ".fishmonger")]        if os.path.join(child, ".fishmonger")        in file_config else PyConfig.FileConfig(file=os.path.join(child, ".fishmonger"),         config=env_config[parent].config        if parent in env_config        else {})
+				ntool_config = file_config[os.path.join(child, ".fishmonger" + tool)] if os.path.join(child, ".fishmonger" + tool) in file_config else PyConfig.FileConfig(file=os.path.join(child, ".fishmonger." + tool), config=tool_config[tool][parent].config if parent in tool_config[tool] else tool_chains[tool].defaults)
+				napp_config  = file_config[os.path.join(child, ".fishmonger.app")]    if os.path.join(child, ".fishmonger.app")    in file_config else PyConfig.FileConfig(file=os.path.join(child, ".fishmonger.app"),     config=app_config[parent].config        if parent in app_config        else {})
+
+				env_config[child]        = nenv_config
+				tool_config[tool][child] = ntool_config
+				app_config[child]        = napp_config
+
+				app_tool_config          = FC.AppToolConfig(
+					child,
+					nenv_config,
+					ntool_config,
+					napp_config
+				)
+				if parent in allconfig[tool]:
+					app_tool_config.parent   = allconfig[tool][parent]
+					app_tool_config.src_root = allconfig[tool][parent]._dir
+					allconfig[tool][parent].children.append(app_tool_config)
+
+				allconfig[tool][child]   = app_tool_config
+
+				dep_dirs = [(".", self.retrieveCode(app_tool_config["DEP_DIR"], x, skip_update=app_tool_config["SKIP_UPDATE"])) for x in app_tool_config["DEPENDENCIES"]]
+				for (ignore, dep_dir) in dep_dirs:
+					app_dirs.append(self.findAppDirs(".", dep_dir, PySet.Set()))
+
+		for tool in allconfig:
+			for child in allconfig[tool]:
+				allconfig[tool][child]["INCLUDE_DIRS"] = include_dirs
+				allconfig[tool][child]["LIB_DIRS"]     = lib_dirs
+
+			## Update types
+			for child in children:
+				apptool = allconfig[tool][child]
+				## If we have no children and no src dir we are a subdir
+				if len(apptool.children) == 0 and not os.path.isdir(os.path.join(child, "src")):
+					apptool.type = FC.AppToolConfig.Types.subdir
+				## If we have no children but have a subdir we're a shallow app
+				elif len(apptool.children) == 0 and os.path.isdir(os.path.join(child, "src")):
+					apptool.type = FC.AppToolConfig.Types.app
+				else:
+					count = len(apptool.children)
+					for c in children[child]:
+					#	print "\t", os.path.join(c, "src")
+						if os.path.isdir(os.path.join(c, "src")):
+							count -= 1
+
+					#print "TYPE REDUX", len(apptool.children), count, apptool.name()
+
+					## We have children and all have a src dir; We're a project
+					if count == 0:
+						apptool.type = FC.AppToolConfig.Types.project
+					## If we're not a project and not a subdir we're an app
+					else:
+						apptool.type = FC.AppToolConfig.Types.app
+
+		self.allconfig = allconfig
+		self.children  = children
+		PyLog.debug("Child map", children, log_level=1)
+		PyLog.debug("Generated Config", allconfig, log_level=9)
 
 	## We have to detect the applicaiton folders and generate base app
 	## configurations here. Caling doConfigure will fill in the blanks.
 	## Once we do that we can setup the tool chains
-	def configure(self, tool_chains, action):
+	def configureAction(self, tool_chains, action):
 		(external_tools, internal_tools) = tool_chains
 		tool_chains                      = external_tools + internal_tools
-
-		self.command_list = []
-		if tool_chains == []:
-			return
-
 		## [Module] -> [ToolChain]
 		tool_chains    = [t.ToolChain() for t in tool_chains]
 		## [ToolChain] -> {String:ToolChain}
-		tool_chains    = {t.name() : t for t in tool_chains}
+		tool_chains    = {t.name() : t  for t in tool_chains}
 
-		external_tools = [t.ToolChain() for t in external_tools]
-		external_tools = {t.name() : t for t in external_tools}
+		external_tools = [t.ToolChain().name() for t in external_tools]
 
-		## We just need the SRC_DIR from the root config to get started
-		base_config  = PyConfig.FileConfig(file=".fishmonger", defaults={"SRC_DIR":"src"})
-		
-		allconfig    = {t : {} for t in tool_chains}
-		dependencies = PySet.Set(base_config["SRC_DIR"])
-		
-		PyLog.output("Fetching dependencies")
-		PyLog.increaseIndent()
+		allconfig      = self.allconfig
+		children       = copy.copy(self.children)
 
-		## We only want to search these out once
-		t_env_config  = PyConfig.FileConfig(file=".fishmonger")
-		t_app_config  = PyConfig.FileConfig(file=".fishmonger.app")
-		
-		t_tool_config = {}
-		for tool_chain in tool_chains:
-			t_tool_config[tool_chain] = PyConfig.FileConfig(file=".fishmonger." + tool_chain, config=tool_chains[tool_chain].defaults)
-			
-		for dependency in dependencies:
-			dependency   = PyPath.makeRelative(dependency)
+		usedconfig     = {}
 
-			## We only want to search these out once
-			env_config   = fishmonger.config.ConfigTree(dir=dependency, file=".fishmonger",     config=t_env_config.config)
-			app_config   = fishmonger.config.ConfigTree(dir=dependency, file=".fishmonger.app", config=t_app_config.config)
-		
-			## Generate FULL config for each Tool/Directory
-			## config will be a mapping[tool_name][app_dir]
-			
-			for tool_chain in tool_chains:
-				## get this toolchains ConfigTree
-				tool_config = fishmonger.config.ConfigTree(dir=dependency, file=".fishmonger." + tool_chain, config=t_tool_config[tool_chain].config)
+		external_exclusions = {}
+		## Figure out which nodes are used
+		for tool in tool_chains:
+			for child in children:
+				apptool = allconfig[tool][child]
 
-				## For every directory merge the configs
-				for dir in app_config.getNodes():
-					allconfig[tool_chain][dir] = fishmonger.config.AppToolConfig(
-						dir,
-						env_config[dir],
-						tool_config[dir],
-						app_config[dir]
-					)
+				if apptool.type == FC.AppToolConfig.Types.subdir:
+					PyLog.debug("Child is just a subdir. Let parent build it", child, log_level=5)
+					continue
 
-			## We pick first as we do not allow DEPENDENCIES on a tool chain
-			## so it doesnt matter which we use
-			tool = tool_chains.keys()[0]
-			for dir in allconfig[tool]:
-				dep_dirs   = [self.retrieveCode(allconfig[tool][dir]["DEP_DIR"], x, skip_update=allconfig[tool][dir]["SKIP_UPDATE"]) for x in allconfig[tool][dir]["DEPENDENCIES"]]
-				after_apps = [x for (x, y) in allconfig[tool][dir]["DEPENDENCIES"]]
+				if apptool.type == FC.AppToolConfig.Types.project:
+					PyLog.debug("Child is just a project. Just build it's kids", child, log_level=5)
+					continue
 
-				## Update all instances of the app with the build_after app tokens for the dependencies
-				##
-				## THIS IS BROKEN: Leave commented out until it can be properly reworked.
-				## Have apps declare their own BUILD_AFTER_APPS for now
-				##for ttool in allconfig:
-				##	allconfig[ttool][dir]["BUILD_AFTER_APPS"].append(after_apps)
+				if child in external_exclusions:
+					PyLog.debug("Child used by previous external tool. Cannot be used again", child, external_exclusions[child], log_level=5)
+					external_exclusions[child] = tool
+					continue			
+
+				if tool_chains[tool].uses(apptool):
+					## Since we're used update our children so we only use the relevant ones
+					apptool = apptool.clone(apptool._dir)
+					apptool.children = [c for c in apptool.children if tool_chains[tool].uses(c)]
 					
-				dependencies.append(dep_dirs)
-		PyLog.decreaseIndent()
+					if tool in external_tools:
+						external_exclusions[child] = tool
+					PyLog.debug("Users of Tool", tool, child, log_level=8)
+					if tool not in usedconfig:
+						usedconfig[tool]    = {}
+					usedconfig[tool][child] = apptool
 
-		## Find INCLUDE_DIRS
-		include_dirs = PySet.Set()
-		lib_dirs     = PySet.Set()
-		for dependency in dependencies:
-			include_dirs.append(PyFind.findAllByPattern("*include*", root=dependency, dirs_only=True))
-			lib_dirs.append(    PyFind.findAllByPattern("*lib*",     root=dependency, dirs_only=True))
-
-		## Update config with found INCLUDE_DIRS
-		for t in allconfig:
-			for a in allconfig[t]:
-				allconfig[t][a]["INCLUDE_DIRS"] = include_dirs
-				allconfig[t][a]["LIB_DIRS"]     = lib_dirs
-
-		## Get the apps that we need to build
-		apps = PySet.Set()
-		for tool in tool_chains:		
-			[apps.append(self.determineDirTypes(PyPath.makeRelative(d), allconfig[tool])[0]) for d in dependencies]
-	
-		## Determine who uses what
-		to_del = PySet.Set()
-		for t_key in allconfig:
-			for a_key in allconfig[t_key]:
-				app   = allconfig[t_key][a_key]
-
-				## If the app has no src_dirs it has nothing to build
-				if app.src_dirs == []:
-					to_del.append((t_key, a_key))
-					continue
-
-				## Update src_dirs to just those this tool will use
-				uses = tool_chains[t_key].uses(app)
-
-				if not uses:
-					## If there are no src_dirs found this app doesnt use this tool.
-					to_del.append((t_key, a_key))
-					continue
-
-				if t_key in external_tools:
-					## If it's an external tool we only allow it to process this app
-					for tt_key in allconfig:
-						if tt_key == t_key:
-							continue
-						to_del.append((tt_key, a_key))
-
-
-		for (t_key, a_key) in to_del:
-			del allconfig[t_key][a_key]
-
-		for t_tool in allconfig:
-			tool_chains[t_tool].apps = allconfig[t_tool].values()
-
-		## Determine Vertexes
+		allconfig = usedconfig
+		PyLog.debug("Updated Config", allconfig, log_level=9)
+		
 		vertexes   = PySet.Set()
-		for t_key in allconfig:
-			tool      = t_key
-			for a_key in allconfig[t_key]:
-				app   = allconfig[t_key][a_key]
-				name  = app.name()
+		for tool in allconfig:
+			for child in allconfig[tool]:
+				apptool = allconfig[tool][child]
+				name    = apptool.name()
 
 				## Build graph of dependencies
 				edges = PySet.Set()
-				root  = app.root()
+				root  = apptool.path(DF.source|DF.root)
 
 				## If we build after a tool we build after all nodes of that tool
 				after_tools = PySet.Set()
-
-				#print "\nNODES", t_key, a_key
-				for t in app["BUILD_AFTER_TOOLS"]:
+				for t in apptool["BUILD_AFTER_TOOLS"]:
+					## Add an edge for each app that uses this tool
 					after_tools.append([(t, allconfig[t][a].name()) for a in allconfig[t]])
 					edges.append(after_tools)
-				#print "TOOLS:", after_tools
+				PyLog.debug("After tools", after_tools, log_level=8)
 				edges.append(after_tools)
 
 				## If we build after apps we build after them for each tool
 				## Since we're iterating for each tool we'll get to adding those nodes eventually
 				after_apps = PySet.Set()
-				for a in app["BUILD_AFTER_APPS"]:
+				for after in apptool["BUILD_AFTER_APPS"]:
 					## We may be told to build after ourself...
 					## Don't do that
-					if a == name:
+					if after == name:
+						PyLog.warning("Attemping to build ourself after ourself... This seems silly please fix that")
 						continue
-					for aa_key in allconfig[t_key]:
-						if allconfig[t_key][aa_key].name() == a:
-							after_apps.append((t_key, allconfig[t_key][aa_key].name()))
-				#print "APPS:", after_apps, app["BUILD_AFTER_APPS"]
+					if after in allconfig[tool]:
+						after_apps.append((tool, after))
+
+				PyLog.debug("App and Afters", (tool, name), after_apps, log_level=8)
 				edges.append(after_apps)
 
 				## Add specific requirements
-				edges.append(app["BUILD_AFTER"])
+				edges.append(apptool["BUILD_AFTER"])
 
-				#print "EDGES", edges
-
+				PyLog.debug("Edges", edges, log_level=8)
 				vertexes.append(PyGraph.Vertex((tool, name), edges, data={"tool":tool, "root":root}))
-		
+
+		sorted_vertexes = [v.name for v in vertexes]
+		sorted_vertexes.sort()
+		PyLog.debug("Vertexes", sorted_vertexes, log_level=6)
+
 		## Graph the vertexes
 		digraph    = PyGraph.DiGraph(vertexes)
 		
@@ -293,8 +282,9 @@ class FishMonger():
 		taskorders = digraph.topologicalOrder()
 		## Correct order
 		taskorders.reverse()
-	
-		## build command list
+
+		PyLog.debug("Build order", taskorders, log_level=7)
+
 		self.command_list = [(getattr(tool_chains[digraph[order]["tool"]], action), allconfig[digraph[order]["tool"]][digraph[order]["root"]]) for order in taskorders]
 
 	## We have to detect the applicaiton folders and generate base app
@@ -317,12 +307,12 @@ class FishMonger():
 		external_tools = {t.name() : t for t in external_tools}
 
 		## We just need the SRC_DIR from the root config to get started
-		base_config  = PyConfig.FileConfig(file=".fishmonger", defaults={"SRC_DIR":"src"})
+		base_config  = PyConfig.FileConfig(file=".fishmonger", defaults={})
 		
 		allconfig    = {}
-		dependencies = PySet.Set(base_config["SRC_DIR"])
+		dependencies = PySet.Set("src")
 		
-		PyLog.output("Fetching dependencies")
+		PyLog.debug("Fetching dependencies")
 		PyLog.increaseIndent()
 
 		## We only want to search these out once
@@ -336,7 +326,7 @@ class FishMonger():
 		for tool_chain in tool_chains:
 			## For every directory merge the configs
 
-			app_config = fishmonger.config.AppToolConfig(
+			app_config = FC.AppToolConfig(
 				".",
 				t_env_config,
 				None,
@@ -345,7 +335,9 @@ class FishMonger():
 
 			app_config.children = [1]
 
-			if tool_chains[tool_chain].uses(app_config):
+			src_configs = tool_chains[tool_chain].uses(app_config)
+			app_config.src_configs = src_configs
+			if len(app_config.src_configs) != 0:
 				allconfig[tool_chain] = app_config
 			
 		PyLog.decreaseIndent()		
@@ -353,55 +345,57 @@ class FishMonger():
 		## build command list
 		self.command_list = [(getattr(tool_chains[tool_chain], action), allconfig[tool_chain]) for tool_chain in allconfig]
 
-
 	def runAction(self):
 		for (action, app) in self.command_list:
-			action(app)
+			res = action(app)
+			if res == False:
+				PyLog.error("Action returned failure", action, app)
+				sys.exit(1)
 
 	def build(self, tools):
-		PyLog.output("Building")
+		PyLog.log("Building")
 		PyLog.increaseIndent()
-		self.configure(tools, "build")
+		self.configureAction(tools, "build")
 		self.runAction()
 		PyLog.decreaseIndent()
 
 	def install(self, tools):
-		PyLog.output("Installing")
+		PyLog.log("Installing")
 		PyLog.increaseIndent()
-		self.configure(tools, "install")
+		self.configureAction(tools, "install")
 		self.runAction()
 		PyLog.decreaseIndent()
 
 	def document(self, tools):
-		PyLog.output("Documenting")
+		PyLog.log("Documenting")
 		PyLog.increaseIndent()
-		self.configure(tools, "document")
+		self.configureAction(tools, "document")
 		self.runAction()
 		PyLog.decreaseIndent()
 
 	def clean(self, tools):
-		PyLog.output("Cleaning")
+		PyLog.log("Cleaning")
 		PyLog.increaseIndent()
-		self.configure(tools, "clean")
+		self.configureAction(tools, "clean")
 		self.runAction()
 		PyLog.decreaseIndent()
 
 	def generate(self, tools):
-		PyLog.output("Generating")
+		PyLog.log("Generating")
 		PyLog.increaseIndent()
-		self.configure(tools, "generate")
+		self.configureAction(tools, "generate")
 		self.runAction()
 		PyLog.decreaseIndent()
 
 	def link(self, tools):
-		PyLog.output("Linking")
+		PyLog.log("Linking")
 		PyLog.increaseIndent()
-		self.configure(tools, "link")
+		self.configureAction(tools, "link")
 		self.runAction()
 		PyLog.decreaseIndent()
 
 	def package(self, tools):
-		PyLog.output("Packaging")
+		PyLog.log("Packaging")
 		PyLog.increaseIndent()
 		self.packageConfigure(tools, "package")
 		self.runAction()
@@ -410,13 +404,8 @@ class FishMonger():
 def main():
 	cli = PyConfig.CLIConfig()
 
-	x = 1;
-	extraToolChains = []
-	while x in cli:
-		extraToolChains.append(cli[x])
-		x += 1
-
-	fishmonger.addInternalToolChains(extraToolChains)
+	PyLog.setLogLevel(0 if "LOG_LEVEL" not in cli else int(cli["LOG_LEVEL"]))
+	
 	fishmonger.addInternalToolChains(cli.get("INTERNAL_TOOL", []))
 	fishmonger.addExternalToolChains(cli.get("EXTERNAL_TOOL", []))
 	fishmonger.addGenerateToolChains(cli.get("GENERATE_TOOL", []))
@@ -448,13 +437,20 @@ def main():
 
 	actions["test"]     = [(None, [])]
 
-	
-	if cli[0] in actions:
-		tasks = actions[cli[0]]
+	x = 0;
+	if x not in cli:
+		PyLog.error("Usage: fishmonger <clean|build|compile|install|doc|document>")
+		return 1
+
+	PyLog.log("Configuring")
+	PyLog.increaseIndent()
+	fish.configure(fishmonger.AllToolChains.values())
+	PyLog.decreaseIndent()
+
+	while cli[x] in actions:
+		tasks = actions[cli[x]]
 		for (task, tools) in tasks:
 			task((fishmonger.ExternalToolChains, tools))
-	else:
-		PyLog.output("Usage: fishmonger <clean|build|compile|install|doc|document> [ToolChain[s]]")
-		return 0
-		
+		x += 1
+
 main()

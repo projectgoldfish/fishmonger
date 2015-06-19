@@ -1,12 +1,13 @@
-import pybase.config
-import pyerl       as PyErl
-import pybase.util as PyUtil
-import pybase.find as PyFind
-import pybase.sh   as PySH
+import pybase.config as PC
+import pyerl         as PyErl
+import pybase.util   as PyUtil
+import pybase.find   as PyFind
+import pybase.sh     as PySH
 import os.path
 import shutil
 
 import fishmonger
+import fishmonger.dirflags as DF
 
 class ToolChain(fishmonger.ToolChain):
 	def __init__(self):
@@ -16,7 +17,9 @@ class ToolChain(fishmonger.ToolChain):
 	def uses(self, app):
 		self.name()
 
-		if os.path.isfile(os.path.join(app.root(), "rebar.config")):
+		rebar_file = app.path(DF.source|DF.root, file_name="rebar.config")
+
+		if os.path.isfile(rebar_file):
 			return True
 		return False
 
@@ -24,7 +27,7 @@ class ToolChain(fishmonger.ToolChain):
 		pass
 
 	def buildApp(self, child, app):
-		return ["cd " + app.root() + " && rebar compile"]
+		return ["cd " + child.path(DF.source|DF.root) + " && rebar compile"]
 
 	def link(self, app):
 		pass

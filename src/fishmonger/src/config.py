@@ -9,7 +9,11 @@ import pybase.find   as PyFind
 
 import pybase.kwargs as PyKWArgs
 
+import pybase.log    as PyLog
+
 import os.path
+
+import fishmonger.dirflags as DF
 
 def dirs(ds):
 	t_ds = PySet.Set(ds)
@@ -19,15 +23,16 @@ def dirs(ds):
 		r_ds.append(t_d.split(""))
 	return 
 
-class AppConfigDirTypes:
-	base, app = range(2)
-
 class AppToolConfig(PyConfig.Config):
+	class Types:
+		project, app, subdir = range(0, 3)
 	def __init__(self, dir, *args):
-		self.dir          = dir
+
+		PyLog.debug("AppToolConfig created for", dir, *args, log_level=6)
+		self.type         = AppToolConfig.Types.project
+
+		self._dir         = dir
 		self.src_root     = dir
-		self.app_root     = dir
-		self.src_dirs     = []
 
 		self.parent       = None
 		self.children     = []
@@ -45,9 +50,8 @@ class AppToolConfig(PyConfig.Config):
 			"LIB_DIRS"          : PySet.Set(), ## Directories prebuilt libraries exist in
 
 			"DOC_DIR"           : "doc",       ## Directory to install documentation into
-			"SRC_DIR"           : "src",       ## Directory to look for source code in
 
-			"BUILD_DIR"         : "build",     ## Directory to place built files into
+			"BUILD_PREFIX"      : "build",     ## Directory to place built files into
 			"DEP_DIR"           : "deps",      ## Directory to checkout code into
 
 			"INSTALL_PREFIX"    : "install",   ## Directory to install into
@@ -82,7 +86,6 @@ class AppToolConfig(PyConfig.Config):
 			"LIB_DIRS"          : PySet.Set(), ## Directories prebuilt libraries exist in
 
 			"DOC_DIR"           : "doc",       ## Directory to install documentation into
-			"SRC_DIR"           : "src",       ## Directory to look for source code in
 
 			"INSTALL_PREFIX"    : "install",   ## Directory to install into
 
@@ -96,8 +99,7 @@ class AppToolConfig(PyConfig.Config):
 			"LIB_DIRS"          : PySet.Set(), ## Directories prebuilt libraries exist in
 
 			"DOC_DIR"           : "doc",       ## Directory to install documentation into
-			"SRC_DIR"           : "src",       ## Directory to look for source code in
-			"BUILD_DIR"         : "build",     ## Directory to place built files into
+			"BUILD_PREFIX"      : "build",     ## Directory to place built files into
 
 			"TOOL_CLI_OPTIONS"  : PySet.Set(),
 
@@ -115,10 +117,9 @@ class AppToolConfig(PyConfig.Config):
 			"LIB_DIRS"          : PySet.Set(), ## Directories prebuilt libraries exist in
 			
 			"DOC_DIR"           : "doc",       ## Directory to install documentation into
-			"SRC_DIR"           : "src",       ## Directory to look for source code in
-			"BUILD_DIR"         : "build",     ## Directory to place built files into
+			"BUILD_PREFIX"      : "build",     ## Directory to place built files into
 			
-			"APP_OPTIONS"       : {}           ## Free space. Used by tool chain to 
+			"APP_OPTIONS"       : {}           ## Free space. Used by tool chain to
 		}
 
 		env_allowed    = {x : True for x in env_defaults.keys()}
@@ -153,98 +154,120 @@ class AppToolConfig(PyConfig.Config):
 			elif isinstance(self.config[key], dict) and isinstance(values[key], dict):
 				PyUtil.mergeDicts(self.config[key], values[key])
 
-	def isRoot(self):
-		return self.src_root == self.dir
+	def path(self, options=0, dirs=[], subdirs=[], file_name=None, lang=None, relative_to=None):
+		## Check for validity
+		prefix   = self.getPrefix(options)
+		dir_name = self.getDirName(options, lang)
 
-	def offset(self):
-		if len(self.src_root) < len(self.dir):
-			return self.dir[len(self.src_root)+1:]
-		else:
-			return ""
+		d = self.makeDir(prefix, dirs, dir_name, subdirs, file_name, options, relative_to)
+		PyLog.debug("Generated dir", d, log_level=8, **{"options":options, "dirs":dirs, "subdirs":subdirs, "file_name":file_name, "lang":lang})
+		return d
+
+	def howManyBitsSet(self, start, count, bits):
+		values = [1 << d for d in range(start, start+count)]
+		found  = 0
+		for v in values:
+			if ((bits & v) != 0):
+				found += 1
+		return found
+
+	def getPrefix(self, options):
+		found = self.howManyBitsSet(0, 3, options)
+
+		if found == 0:
+			raise "One of source|build|install must be set."
+		if found > 1:
+			raise "Only one of source|build|install may be set."
+		
+		prefix = None
+		if options & DF.source:
+			prefix = self._dir
+		elif options & DF.build:
+			prefix = self["BUILD_PREFIX"]
+		elif options & DF.install:
+			prefix = self["INSTALL_PREFIX"]
+		return prefix
+
+	def getDirName(self, options, lang):
+		found = self.howManyBitsSet(3, 9, options)
+
+		if found == 0:
+			raise "None found; One of bin|doc|etc|langlib|lib|sbin|var must be set."
+		if found > 1:
+			raise "Multiple found; Only one of bin|doc|etc|langlib|lib|sbin|var may be set."
+		
+		app     = True if options & DF.app     else False
+		version = True if options & DF.version else False
+
+		dir_name = None
+		if   options & DF.bin:
+			dir_name = "bin"
+		elif options & DF.doc:
+			dir_name = "doc"
+		elif options & DF.etc:
+			dir_name = "etc"
+		elif options & DF.langlib:
+			if lang == None:
+				raise "lang must be specified for langlib"
+			dir_name = "lib/" + lang + "/lib"
+		elif options & DF.lib:
+			dir_name = "lib"
+		elif options & DF.root:
+			dir_name = ""
+		elif options & DF.sbin:
+			dir_name = "sbin"
+		elif options & DF.src:
+			if not os.path.isdir(os.path.join(self._dir, "src")):
+				dir_name = ""
+			else:
+				dir_name = "src"
+		elif options & DF.var:
+			dir_name = "var"
+			
+		if app:
+			if version:
+				return os.path.join(dir_name, self.name() + "-" + PyRCS.getVersion(self._dir))
+			return os.path.join(dir_name, self.name())
+		return dir_name
+
+	def makeDir(self, prefix, dirs, dir_name, subdirs, file_name, options, relative_to):
+		_dir = prefix
+		for d in dirs:
+			_dir = os.path.join(_dir, d)
+		_dir = os.path.join(_dir, dir_name)
+		for d in subdirs:
+			_dir = os.path.join(_dir, d)
+		if file_name != None:
+			_dir = os.path.join(_dir, file_name)
+
+		if _dir[-1:] == "/":
+			_dir = _dir[:-1]
+
+		found = self.howManyBitsSet(14, 2, options)
+		if found == 2:
+			raise "Cannot specify absolute AND relative"
+
+		if (DF.absolute & options) == DF.absolute:
+			return PyPath.makeAbsolute(_dir)
+		if (DF.relative & options) == DF.relative:
+			if relative_to == None:
+				raise "Must specify a directory to make this relative to..."
+			return PyPath.makeRelative(_dir, relative_to)
+
+		return str(_dir)
 
 	def name(self):
-		name = os.path.basename(self.src_root)
-		if name == self["SRC_DIR"]:
-			return os.path.basename(os.path.dirname(self.src_root))
+		name = os.path.basename(self._dir)
 		if name == ".":
 			return os.path.basename(PyPath.makeAbsolute(self.src_root))
-		return name
-
-	def root(self):
-		return self.dir
-
-	def getDir(self, prefix="", base="", suffix="", file="", version=False, absolute=False, install=False):
-		dir = ""
-		if install:
-			dir = self["INSTALL_PREFIX"]
-		
-		if version:
-			base = base + "-" + PyRCS.getVersion()
- 
-		dir = os.path.join(dir, os.path.join(prefix, os.path.join(base, os.path.join(self.offset(), os.path.join(suffix, file)))))
-
-		if absolute == True:
-			dir = PyPath.makeAbsolute(dir)
+		if self.type == AppToolConfig.Types.subdir:
+			return self.parent.name() + "/" + name
 		else:
-			dir = PyPath.makeRelative(dir)
+			return name
 
-		return dir
- 
-	def appDir(self, subdir="", file=""):
-		return os.path.join(os.path.join(self.dir, subdir), file)
+	def isRoot(self):
+		return self.type == AppToolConfig.Types.app
 
- 	def srcDir(self, subdir="", file=""):
- 		src_dir = os.path.join(self.dir, self["SRC_DIR"])
- 		if os.path.isdir(src_dir):
- 			return os.path.join(os.path.join(src_dir, subdir), file)
- 		else:
- 			return os.path.join(os.path.join(self.dir, subdir), file)
-
-	def buildDir(self, subdir="", file="", absolute=False):
-		path = os.path.join(os.path.join(os.path.join(self.app_root, self["BUILD_DIR"]), subdir), file)
-		if absolute:
-			path = PyPath.makeAbsolute(path)
-		return path
- 		
-	def installDir(self, install=True, **kwargs):
-		args = ["prefix", "base", "suffix", "file", "absolute"]
-		return self.getDir(install=True, **PyKWArgs.sanitize(args, **kwargs))
-
-	def installEtcDir(self, subdir="", file="", **kwargs):
-		args = ["absolute"]
-		return self.getDir(prefix="etc", base=subdir, file=file, install=True, **PyKWArgs.sanitize(args, **kwargs))
-
-	def installBinDir(self, subdir="", file="", **kwargs):
-		args = ["absolute"]
-		return self.getDir(prefix="bin", base=subdir, file=file,  install=True, **PyKWArgs.sanitize(args, **kwargs))
-
-	def installLibDir(self, subdir="", file="", **kwargs):
-		args = ["absolute"]
-		return self.getDir(prefix="lib", base=subdir, file=file,  install=True, **PyKWArgs.sanitize(args, **kwargs))
-
-	def installVarDir(self, subdir="", file="", **kwargs):
-		args = ["absolute"]
-		return self.getDir(prefix="var", base=subdir, file=file,  install=True, **PyKWArgs.sanitize(args, **kwargs))
-
-	def installLangSubDir(self, lang, subdir="", file="", app=False, **kwargs):
-		name = self.name()
-		if not app:
-			name = ""
-
-		args = ["version", "absolute"]
-		return self.getDir(prefix="lib", base=lang + "/lib/" + name, suffix=subdir, file=file, install=False, **PyKWArgs.sanitize(args, **kwargs))
-
-	def installLangDir(self, lang, subdir="", file="", app=False, **kwargs):
-		name = self.name()
-		if not app:
-			name = ""
-
-		args = ["version", "absolute"]
-		return self.getDir(prefix="lib", base=lang + "/lib/" + name, suffix=subdir, file=file, install=True, **PyKWArgs.sanitize(args, **kwargs))
-
-	def installDocDir(self, lang, subdir="", file="", app=None, version=True, **kwargs):
-		args = ["absolute"]
-		return self.getDir(prefix="doc/" + lang, base=self.name(), install=True, version=version, **PyKWArgs.sanitize(args, **kwargs))
 
 class ConfigMap():
 	def __init__(*args, **kwargs):
@@ -282,8 +305,6 @@ class ConfigTree(ConfigMap):
 
 	def getNodes(self):
 		return self.mapping.keys()
-
-
 
 class ConfigPath(ConfigMap):
 	def __init__(self, parent=None, file=".fishmonger", root=".", path=".", mapping={}, **kwargs):
