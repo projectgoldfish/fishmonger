@@ -151,6 +151,8 @@ class ToolChain(object):
 	def getApps(self):
 		return [app.name() for app in self.apps]
 
+AllToolChains      = PySet.Set()
+
 InternalToolChains = PySet.Set()
 ExternalToolChains = PySet.Set()
 
@@ -172,6 +174,7 @@ def addToolChains(array, target, prefix=""):
 	for c in array:
 		modules.append(prefix + c)
 	PyUtil.loadModules(modules, target)
+	PyUtil.loadModules(modules, AllToolChains)
 
 def addInternalToolChains(array):
 	addToolChains(array, InternalToolChains)

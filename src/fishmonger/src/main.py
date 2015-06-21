@@ -273,7 +273,7 @@ class FishMonger():
 
 		sorted_vertexes = [v.name for v in vertexes]
 		sorted_vertexes.sort()
-		PyLog.debug("Vertexes", sorted_vertexes, log_level=6)
+		PyLog.debug("Vertexes", sorted_vertexes, log_level=5)
 
 		## Graph the vertexes
 		digraph    = PyGraph.DiGraph(vertexes)
@@ -444,7 +444,7 @@ def main():
 
 	PyLog.log("Configuring")
 	PyLog.increaseIndent()
-	fish.configure(fishmonger.AllToolChains.values())
+	fish.configure(fishmonger.AllToolChains)
 	PyLog.decreaseIndent()
 
 	while cli[x] in actions:

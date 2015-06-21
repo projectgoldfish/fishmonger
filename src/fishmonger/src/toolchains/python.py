@@ -9,14 +9,15 @@ import pybase.sh   as PySH
 import fishmonger
 import fishmonger.dirflags as DF
 
-import traceback
-
 class ToolChain(fishmonger.ToolChain):
 	def __init__(self):
 		self.defaults   = {
 			"APPLICATION" : False
 		}
 		self.extensions = ["py"]
+
+	def buildApp(self, child, app):
+		pass
 
 	def installApp(self, child, app):
 		self.installLibrary(child)

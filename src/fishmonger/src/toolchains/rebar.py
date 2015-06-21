@@ -34,11 +34,11 @@ class ToolChain(fishmonger.ToolChain):
 
 	def documentApp(self, child, app):
 		for app in self.apps:
-			PySH.cmd("cd " + app.appDir() + " && rebar doc")
-			doc_dir = app.installDocDir("erlang")
-			PySH.copy(app.appDir(subdir="doc"), doc_dir, force=True)
+			PySH.cmd("cd " + app.path(DF.source|DF.root) + " && rebar doc")
+			doc_dir = app.path(DF.install|DF.doc|DF.app|DF.version, dirs=["erlang"])
+			PySH.copy(app.path(DF.source|DF.root, subdir="doc"), doc_dir, force=True)
 
 	def installApp(self, child, app):
 		for dir in ["ebin", "priv"]:
-			install_erl_dir = app.installLangDir("erlang", subdir=dir, app=True, version=True)
-			PySH.copy(app.appDir(subdir=dir), install_erl_dir, force=True)
+			install_erl_dir = app.path(DF.install|DF.langlib|DF.app|DF.version, lang="erlang", subdirs=[dir])
+			PySH.copy(app.path(DF.source|DF.root, subdirs=[dir]), install_erl_dir, force=True)

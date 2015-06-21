@@ -12,6 +12,8 @@ import os.path
 import shutil
 
 import fishmonger
+import fishmonger.dirflags  as DF
+import fishmonger.utils.erl as FishErl
 
 class ErlApp(object):
 	def __init__(self, file, app):
@@ -32,7 +34,7 @@ class ErlApp(object):
 
 		modules_tuple = PyErl.term("{modules, []}.")
 
-		for mod in PyFind.findAllByPattern("*erl", self.app.srcDir()):
+		for mod in PyFind.findAllByPattern("*erl", self.app.path(DF.source|DF.src)):
 			(mod, x) = os.path.splitext(os.path.basename(mod))
 			modules_tuple[1].appendChild(PyErl.PyErlString(mod))
 		arg_list.appendChild(modules_tuple)
@@ -77,13 +79,14 @@ class ToolChain(fishmonger.ToolChain):
 		file_src  = name + ".app.fish"
 		file_name = name + ".app"
 		
-		app_src   = app.srcDir(  file=file_src)
-		app_file  = app.buildDir(subdir="ebin", file=file_name)
+		app_src   = app.path(DF.source|DF.src, file_name=file_src)
+		app_file  = app.path(DF.build|DF.langlib|DF.app, lang="erlang", subdirs=["ebin"], file_name=file_name)
 		if os.path.isfile(app_src):
 			doc   = ErlApp(app_src, app)
+			print "Write", app_file
 			doc.write(app_file)
 		else:
-			app_src = app.srcDir(file=file_name)
+			app_src = app.path(DF.source|DF.src, file_name=file_name)
 			if os.path.isfile(app_src):
 				shutil.copyfile(app_src, app_file)
 
@@ -103,7 +106,11 @@ class ToolChain(fishmonger.ToolChain):
 	def installApp(self, child, app):
 		name      = app.name()
 		file_name = name + ".app"
-		src_file  = app.buildDir(subdir="ebin", file=file_name)
-		dst_file  = app.installLangDir("erlang", subdir="ebin", file=file_name, app=True, version=True)
+		
+		src_file  = app.path(DF.build|DF.langlib|DF.app, lang="erlang", subdirs=["ebin"], file_name=file_name)
+		dst_file  = app.path(DF.install|DF.langlib|DF.app|DF.version, lang="erlang", subdirs=["ebin"], file_name=file_name)
+
+		print "Copy", src_file, dst_file
+
 		PySH.copy(src_file, dst_file)
 
