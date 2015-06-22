@@ -83,7 +83,6 @@ class ToolChain(fishmonger.ToolChain):
 		app_file  = app.path(DF.build|DF.langlib|DF.app, lang="erlang", subdirs=["ebin"], file_name=file_name)
 		if os.path.isfile(app_src):
 			doc   = ErlApp(app_src, app)
-			print "Write", app_file
 			doc.write(app_file)
 		else:
 			app_src = app.path(DF.source|DF.src, file_name=file_name)
@@ -109,8 +108,6 @@ class ToolChain(fishmonger.ToolChain):
 		
 		src_file  = app.path(DF.build|DF.langlib|DF.app, lang="erlang", subdirs=["ebin"], file_name=file_name)
 		dst_file  = app.path(DF.install|DF.langlib|DF.app|DF.version, lang="erlang", subdirs=["ebin"], file_name=file_name)
-
-		print "Copy", src_file, dst_file
 
 		PySH.copy(src_file, dst_file)
 

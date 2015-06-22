@@ -191,6 +191,9 @@ class FishMonger():
 		tool_chains    = {t.name() : t  for t in tool_chains}
 
 		external_tools = [t.ToolChain().name() for t in external_tools]
+		internal_tools = [t.ToolChain().name() for t in internal_tools]
+
+		tool_order     = external_tools + internal_tools
 
 		allconfig      = self.allconfig
 		children       = copy.copy(self.children)
@@ -199,7 +202,7 @@ class FishMonger():
 
 		external_exclusions = {}
 		## Figure out which nodes are used
-		for tool in tool_chains:
+		for tool in tool_order:
 			for child in children:
 				apptool = allconfig[tool][child]
 
@@ -213,7 +216,6 @@ class FishMonger():
 
 				if child in external_exclusions:
 					PyLog.debug("Child used by previous external tool. Cannot be used again", child, external_exclusions[child], log_level=5)
-					external_exclusions[child] = tool
 					continue			
 
 				if tool_chains[tool].uses(apptool):
@@ -223,6 +225,7 @@ class FishMonger():
 					
 					if tool in external_tools:
 						external_exclusions[child] = tool
+					
 					PyLog.debug("Users of Tool", tool, child, log_level=8)
 					if tool not in usedconfig:
 						usedconfig[tool]    = {}
