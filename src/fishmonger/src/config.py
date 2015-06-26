@@ -30,9 +30,12 @@ class AppToolConfig(PyConfig.Config):
 
 		PyLog.debug("AppToolConfig created for", dir, *args, log_level=6)
 		self.type         = AppToolConfig.Types.project
+		self.dependency   = False
 
 		self._dir         = dir
 		self.src_root     = dir
+
+		self.package      = False
 
 		self.parent       = None
 		self.children     = []
@@ -154,6 +157,14 @@ class AppToolConfig(PyConfig.Config):
 			elif isinstance(self.config[key], dict) and isinstance(values[key], dict):
 				PyUtil.mergeDicts(self.config[key], values[key])
 
+	#def inpath(self, *args, **kwargs):
+	#	kwargs["use_prefix"] = False
+	#	return self.__path(*args, **kwargs)
+
+	#def outpath(self, *args, **kwargs):
+	#	kwargs["use_prefix"] = True
+	#	return self.__path(*args, **kwargs)
+
 	def path(self, options=0, dirs=[], subdirs=[], file_name=None, lang=None, relative_to=None):
 		## Check for validity
 		prefix   = self.getPrefix(options)
@@ -186,6 +197,10 @@ class AppToolConfig(PyConfig.Config):
 			prefix = self["BUILD_PREFIX"]
 		elif options & DF.install:
 			prefix = self["INSTALL_PREFIX"]
+
+		if not options & DF.source and self.package:
+			prefix = os.path.join("package", prefix)
+
 		return prefix
 
 	def getDirName(self, options, lang):

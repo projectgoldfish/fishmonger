@@ -3,6 +3,8 @@ import sys
 
 import copy
 
+import signal
+
 import fishmonger
 
 import fishmonger.config   as FC
@@ -23,6 +25,12 @@ import pyrcs         as PyRCS
 
 if sys.version_info < (2, 7):
 	raise "Requires python 2.7+"
+
+def ctrl_c(signal, frame):
+	PyLog.log("Exiting on CTRL+C")
+	sys.exit(0)
+
+signal.signal(signal.SIGINT, ctrl_c)
 
 class FishMongerException(Exception):
 	pass
@@ -105,6 +113,7 @@ class FishMonger():
 		app_config   = {}
 		include_dirs = PySet.Set()
 		lib_dirs     = PySet.Set()
+		all_dep_dirs = PySet.Set()
 		for (parent, child) in app_dirs:
 			include_dirs.append(PyFind.findAllByPattern("*include*", root=child, dirs_only=True))
 			lib_dirs.append(    PyFind.findAllByPattern("*lib*",     root=child, dirs_only=True))
@@ -142,7 +151,9 @@ class FishMonger():
 
 				dep_dirs = [(".", self.retrieveCode(app_tool_config["DEP_DIR"], x, skip_update=app_tool_config["SKIP_UPDATE"])) for x in app_tool_config["DEPENDENCIES"]]
 				for (ignore, dep_dir) in dep_dirs:
-					app_dirs.append(self.findAppDirs(".", dep_dir, PySet.Set()))
+					t_dep_dirs = self.findAppDirs(".", dep_dir, PySet.Set())
+					all_dep_dirs.append([y for (x,y) in t_dep_dirs])
+					app_dirs.append(t_dep_dirs)
 
 		for tool in allconfig:
 			for child in allconfig[tool]:
@@ -152,6 +163,10 @@ class FishMonger():
 			## Update types
 			for child in children:
 				apptool = allconfig[tool][child]
+
+				if apptool._dir in all_dep_dirs:
+					apptool.dependency = True
+
 				## If we have no children and no src dir we are a subdir
 				if len(apptool.children) == 0 and not os.path.isdir(os.path.join(child, "src")):
 					apptool.type = FC.AppToolConfig.Types.subdir
@@ -293,60 +308,10 @@ class FishMonger():
 	## We have to detect the applicaiton folders and generate base app
 	## configurations here. Caling doConfigure will fill in the blanks.
 	## Once we do that we can setup the tool chains
-	def packageConfigure(self, tool_chains, action):
-		(external_tools, internal_tools) = tool_chains
-		tool_chains                      = external_tools + internal_tools
-
-		self.command_list = []
-		if tool_chains == []:
-			return
-
-		## [Module] -> [ToolChain]
-		tool_chains    = [t.ToolChain() for t in tool_chains]
-		## [ToolChain] -> {String:ToolChain}
-		tool_chains    = {t.name() : t for t in tool_chains}
-
-		external_tools = [t.ToolChain() for t in external_tools]
-		external_tools = {t.name() : t for t in external_tools}
-
-		## We just need the SRC_DIR from the root config to get started
-		base_config  = PyConfig.FileConfig(file=".fishmonger", defaults={})
-		
-		allconfig    = {}
-		dependencies = PySet.Set("src")
-		
-		PyLog.debug("Fetching dependencies")
-		PyLog.increaseIndent()
-
-		## We only want to search these out once
-		t_env_config  = PyConfig.FileConfig(file=".fishmonger")
-		t_app_config  = PyConfig.FileConfig(file=".fishmonger.app")
-		
-		tool_config = {}
-		for tool_chain in tool_chains:
-			tool_config[tool_chain] = PyConfig.FileConfig(file=".fishmonger." + tool_chain, config=tool_chains[tool_chain].defaults)
-						
-		for tool_chain in tool_chains:
-			## For every directory merge the configs
-
-			app_config = FC.AppToolConfig(
-				".",
-				t_env_config,
-				None,
-				None
-			)
-
-			app_config.children = [1]
-
-			src_configs = tool_chains[tool_chain].uses(app_config)
-			app_config.src_configs = src_configs
-			if len(app_config.src_configs) != 0:
-				allconfig[tool_chain] = app_config
-			
-		PyLog.decreaseIndent()		
-
-		## build command list
-		self.command_list = [(getattr(tool_chains[tool_chain], action), allconfig[tool_chain]) for tool_chain in allconfig]
+	def packageConfigure(self, *args):
+		for tool in self.allconfig:
+			for child in self.allconfig[tool]:
+				self.allconfig[tool][child].package = True
 
 	def runAction(self):
 		for (action, app) in self.command_list:
@@ -400,7 +365,7 @@ class FishMonger():
 	def package(self, tools):
 		PyLog.log("Packaging")
 		PyLog.increaseIndent()
-		self.packageConfigure(tools, "package")
+		self.configureAction(tools, "package")
 		self.runAction()
 		PyLog.decreaseIndent()
 
@@ -411,6 +376,7 @@ def main():
 	
 	fishmonger.addInternalToolChains(cli.get("INTERNAL_TOOL", []))
 	fishmonger.addExternalToolChains(cli.get("EXTERNAL_TOOL", []))
+	fishmonger.addCleanToolChains(   cli.get("CLEAN_TOOL",    []))
 	fishmonger.addGenerateToolChains(cli.get("GENERATE_TOOL", []))
 	fishmonger.addBuildToolChains(   cli.get("BUILD_TOOL",    []))
 	fishmonger.addLinkToolChains(    cli.get("LINK_TOOL",     []))
@@ -423,7 +389,7 @@ def main():
 	tools_for_all       = fishmonger.InternalToolChains
 	
 	actions = {}
-	actions["clean"]    = [(fish.clean, tools_for_all)]
+	actions["clean"]    = [(fish.clean, tools_for_all + fishmonger.CleanToolChains)]
 
 	actions["build"]    = [
 		(fish.generate, tools_for_all + fishmonger.GenerateToolChains),
@@ -436,13 +402,13 @@ def main():
 	actions["doc"]      = [(fish.document, tools_for_all + fishmonger.DocumentToolChains)]
 	actions["document"] = actions["doc"]
 	
-	actions["package"]  = [(fish.package,  fishmonger.PackageToolChains)]
+	actions["package"]  = [(fish.packageConfigure, None)] + actions["clean"] + actions["build"] + actions["install"] + [(fish.package, tools_for_all + fishmonger.PackageToolChains)]
 
 	actions["test"]     = [(None, [])]
 
 	x = 0;
 	if x not in cli:
-		PyLog.error("Usage: fishmonger <clean|build|compile|install|doc|document>")
+		PyLog.error("Usage: fishmonger <clean|build|compile|install|doc|document|package>")
 		return 1
 
 	PyLog.log("Configuring")
@@ -450,10 +416,24 @@ def main():
 	fish.configure(fishmonger.AllToolChains)
 	PyLog.decreaseIndent()
 
-	while cli[x] in actions:
-		tasks = actions[cli[x]]
-		for (task, tools) in tasks:
-			task((fishmonger.ExternalToolChains, tools))
+	cli_actions = []
+	while x in cli:
+		if cli[x] not in actions:
+			PyLog.error("Invalid action", cli[x])
+			PyLog.error("Usage: fishmonger <clean|build|compile|install|doc|document|package>")
+			return 1	
+		cli_actions.append(cli[x])
 		x += 1
 
+	if "package" in cli_actions:
+		cli_actions = ["package"]
+
+	run_actions = []
+	for action in cli_actions:
+		tasks = actions[action]
+		for (task, tools) in tasks:
+			if task not in run_actions:
+				run_actions.append(task)
+				task((fishmonger.ExternalToolChains, tools))
+		
 main()

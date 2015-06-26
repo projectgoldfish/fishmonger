@@ -105,6 +105,13 @@ class ToolChain(object):
 		PyLog.decreaseIndent()
 		return True
 
+	def clean(self, app):
+		return self.runAction(app, "clean", self.cleanApp)
+
+	## buildApp is to return a list of strings and functions to call to build the app.
+	def cleanApp(self, child, app):
+		raise ToolChainException("%s MUST implement cleanApp or override clean!" % self.__class__)
+
 	## Build runs the commands that each app says to use.
 	def build(self, app):
 		return self.runAction(app, "build", self.buildApp)
@@ -156,6 +163,7 @@ AllToolChains      = PySet.Set()
 InternalToolChains = PySet.Set()
 ExternalToolChains = PySet.Set()
 
+CleanToolChains    = PySet.Set()
 GenerateToolChains = PySet.Set()
 BuildToolChains    = PySet.Set()
 LinkToolChains     = PySet.Set()
@@ -182,6 +190,9 @@ def addInternalToolChains(array):
 def addExternalToolChains(array):
 	addToolChains(array, ExternalToolChains)
 	
+def addCleanToolChains(array):
+	addToolChains(array, GenerateToolChains)
+
 def addGenerateToolChains(array):
 	addToolChains(array, GenerateToolChains)
 
@@ -200,15 +211,16 @@ def addInstallToolChains(array):
 def addPackageToolChains(array):
 	addToolChains(array, PackageToolChains)
 
-addToolChains(fishmonger.toolchains.internal(), InternalToolChains, "fishmonger.toolchains");
-addToolChains(fishmonger.toolchains.external(), ExternalToolChains, "fishmonger.toolchains");
+addToolChains(fishmonger.toolchains.internal(), InternalToolChains, "fishmonger.toolchains")
+addToolChains(fishmonger.toolchains.external(), ExternalToolChains, "fishmonger.toolchains")
 
-addToolChains(fishmonger.toolchains.generate(), GenerateToolChains, "fishmonger.toolchains");
-addToolChains(fishmonger.toolchains.build(),    BuildToolChains,    "fishmonger.toolchains");
-addToolChains(fishmonger.toolchains.link(),     LinkToolChains,     "fishmonger.toolchains");
-addToolChains(fishmonger.toolchains.document(), DocumentToolChains, "fishmonger.toolchains");
-addToolChains(fishmonger.toolchains.install(),  InstallToolChains,  "fishmonger.toolchains");
-addToolChains(fishmonger.toolchains.package(),  PackageToolChains,  "fishmonger.toolchains");
+addToolChains(fishmonger.toolchains.clean(),    CleanToolChains,    "fishmonger.toolchains")
+addToolChains(fishmonger.toolchains.generate(), GenerateToolChains, "fishmonger.toolchains")
+addToolChains(fishmonger.toolchains.build(),    BuildToolChains,    "fishmonger.toolchains")
+addToolChains(fishmonger.toolchains.link(),     LinkToolChains,     "fishmonger.toolchains")
+addToolChains(fishmonger.toolchains.document(), DocumentToolChains, "fishmonger.toolchains")
+addToolChains(fishmonger.toolchains.install(),  InstallToolChains,  "fishmonger.toolchains")
+addToolChains(fishmonger.toolchains.package(),  PackageToolChains,  "fishmonger.toolchains")
 
 
 

@@ -4,6 +4,8 @@ import platform
 import shutil
 
 import fishmonger
+import fishmonger.config   as FC
+import fishmonger.dirflags as DF
 
 import pybase.file as PyFile
 import pybase.find as PyFind
@@ -19,39 +21,40 @@ class ToolChain(fishmonger.ToolChain):
 	def uses(self, app):
 		(os_name, trash, trash) = platform.dist()
 		if os_name.lower() in ["centos"]:
-			return True
+			return app.type == True and app.dependency == False
 		return False
 
-	def packageApp(self, child, app):
+	def clean(self, app):
+		if os.path.isdir("package"):
+			shutil.rmtree("package")
+
+	def package(self, app):
 		## Make certain topdir is set
 		file = PyFile.file(os.path.expanduser("~/.rpmmacros"), permissions="w")
 		file.write("""
 			%%_topdir   %s
 			%%_tmppath %%{_topdir}/tmp
-			""" % PyPath.makeAbsolute(app.buildDir()))
+			""" % app.path(DF.build|DF.root|DF.absolute)
+		)
 		file.close()
 
 		## Make the RPM build dirs
 		dirs = ["BUILD", "BUILD_ROOT", "RPMS", "SOURCES", "SRPMS", "SPECS", "tmp"]
 		for d in dirs:
-			PySH.mkdirs(app.buildDir(subdir=d))
+			PySH.mkdirs(app.path(DF.build|DF.root, subdirs=[d]))
 
 		## Create install directory structure
 		version = PyRCS.getMajorVersion()
 		build   = PyRCS.getMinorVersion()
 
 		package_name = "%s-%s" % (app.name(), version)
-		package_dir  = app.buildDir(subdir="tmp/%s"              % (package_name))
-		package_root = app.buildDir(subdir="tmp/%s/usr/local/%s" % (package_name, app.name()))
-		package_bin  = app.buildDir(subdir="tmp/%s/usr/bin"      % (package_name))
-
-		## Cleanup old
-		if os.path.isdir(package_root):
-			shutil.rmtree(package_root)
+		package_dir  = app.path(DF.build|DF.root, subdirs=["tmp", package_name])
+		package_root = app.path(DF.build|DF.root, subdirs=["tmp", package_name, "usr", "local", app.name()])
+		package_bin  = app.path(DF.build|DF.root, subdirs=["tmp", package_name, "usr", "local", package_name])
 
 		## Copy
 		PySH.mkdirs(package_root)
-		PySH.copy(app.installDir(), package_root)
+		PySH.copy(app.path(DF.install|DF.root), package_root)
 
 		## Rebuild bins
 		package_root_bin = os.path.join(package_root, "bin")
@@ -71,11 +74,11 @@ class ToolChain(fishmonger.ToolChain):
 			PySH.cmd("chmod a+x %s" % file_name)
 
 		## Generate Source ball
-		PySH.cmd("cd %s && tar -czvf %s.tar.gz %s" % (app.buildDir("tmp"), app.buildDir(subdir="SOURCES", file=package_name, absolute=True), package_name), prefix=PyLog.indent, stdout=True, stderr=True)
+		PySH.cmd("cd %s && tar -czvf %s.tar.gz %s" % (app.path(DF.build|DF.root, subdirs=["tmp"]), app.path(DF.build|DF.root|DF.absolute, subdirs=["SOURCES"], file_name=package_name), package_name), stdout=True, stderr=True)
 
 		## Generate spec file
 		name      = app.name()
-		file_name = app.buildDir(subdir="SPECS", file="%s.spec" % name)
+		file_name = app.path(DF.build|DF.root, subdirs=["SPECS"], file_name="%s.spec" % name)
 		f         = PyFile.file(file_name, "w")
 
 		spec      = """
@@ -125,4 +128,5 @@ rm -rf %%{buildroot}
 		f.write(spec)
 		f.close()
 
-		PySH.cmd("rpmbuild -ba %s" % file_name, prefix=PyLog.indent, stdout=True, stderr=True)
+		PySH.cmd("rpmbuild -ba %s" % file_name, stdout=True, stderr=True)
+

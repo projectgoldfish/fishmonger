@@ -24,12 +24,8 @@ class ToolChain(fishmonger.ToolChain):
 		start_apps  = ""
 		apps        = FishErl.getRequiredApps(app.name(), app.path(DF.install|DF.langlib, lang="erlang"))
 
-		print app.name(), apps
-
 		for tapp in apps:
 			start_apps += "-eval \"application:start(" + tapp + ")\" "
-
-		print app.name(), apps, start_apps
 
 		cookie_file = app.path(DF.install|DF.var|DF.absolute, subdirs=["run"], file_name=".cookie")
 		file_name   = app.path(DF.install|DF.bin|DF.absolute, file_name=app_name)

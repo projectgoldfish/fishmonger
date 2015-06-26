@@ -2,6 +2,11 @@ def internal():
 	return [
 	]
 
+def clean():
+	return [
+		"rpm"
+	]
+
 def external():
 	return [
 		"rebar"
