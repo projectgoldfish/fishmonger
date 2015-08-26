@@ -5,7 +5,6 @@ import pybase.find as PyFind
 import pyrcs       as PyRCS
 import pybase.file as PyFile
 import pybase.sh   as PySH
-import pybase.set  as PySet
 import pybase.log  as PyLog
 
 import os.path

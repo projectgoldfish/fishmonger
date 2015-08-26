@@ -2,7 +2,6 @@ import socket
 
 import os.path
 
-import pybase.set  as PySet
 import pybase.find as PyFind
 
 import fishmonger.dirflags as DF
@@ -22,14 +21,12 @@ def initPackageRoot():
 	PackageRoot = package_root
 
 def getAppClassPath(app, path_type):
-	paths = PySet.Set()
+	paths = set()
 	
 	## Add the src and lib dirs
-	paths.append(app.path(path_type|DF.src))
-	paths.append(app.path(path_type|DF.lib))
+	paths |= set([app.path(path_type|DF.src), app.path(path_type|DF.lib)])
 	for child in app.children:
-		paths.append(child.path(path_type|DF.src))
-		paths.append(child.path(path_type|DF.lib))
+		paths |= set([child.path(path_type|DF.src), child.path(path_type|DF.lib)])
 	return paths
 
 def getSourceClassPath(apps, lang="java", extension="jar"):
@@ -42,10 +39,9 @@ def getSourceClassPath(apps, lang="java", extension="jar"):
 	if path_type in ClassPath[lang]:
 		return ClassPath[lang][path_type]
 
-	paths = PySet.Set()
+	paths = set()
 	for lib_dir in apps[0]["LIB_DIRS"]:
-		jars = PyFind.findAllByExtension(extension, lib_dir, root_only=True)
-		paths.append(jars)
+		paths |= set(PyFind.findAllByExtension(extension, lib_dir, root_only=True))
 
 	for app in apps:
 		paths.append(getAppClassPath(app, path_type))
@@ -59,9 +55,9 @@ def getSourceClassPath(apps, lang="java", extension="jar"):
 	return ClassPath[lang][path_type]
 
 def getSourceFiles(apps, lang="java"):
-	files = PySet.Set()
+	files = set()
 	for app in apps:
-		files.append(PyFind.findAllByExtensions([lang], app.path(DF.source|DF.src), root_only=True))
+		files |= set(PyFind.findAllByExtensions([lang], app.path(DF.source|DF.src), root_only=True))
 		for child in app.children:
-			files.append(PyFind.findAllByExtensions([lang], child.path(DF.source|DF.src), root_only=True))
+			files |= set(PyFind.findAllByExtensions([lang], child.path(DF.source|DF.src), root_only=True))
 	return files

@@ -2,8 +2,6 @@
 import pyrcs         as PyRCS
 import pybase.config as PyConfig
 
-import pybase.set    as PySet
-
 import pybase.path   as PyPath
 import pybase.find   as PyFind
 
@@ -15,13 +13,13 @@ import os.path
 
 import fishmonger.dirflags as DF
 
-def dirs(ds):
-	t_ds = PySet.Set(ds)
-	r_ds = PySet.Set()
-
-	for t_d in t_ds:
-		r_ds.append(t_d.split(""))
-	return 
+#def dirs(ds):
+#	t_ds = set(ds)
+#	r_ds = set()
+#
+#	for t_d in t_ds:
+#		r_ds |= set(t_d.split(""))
+#	return 
 
 class AppToolConfig(PyConfig.Config):
 	class Types:
@@ -43,14 +41,14 @@ class AppToolConfig(PyConfig.Config):
 		self.config       = {}
 
 		self.defaults     = {
-			"BUILD_AFTER_TOOLS" : PySet.Set(), ## ToolChains that must be run first
-			"BUILD_AFTER_APPS"  : PySet.Set(), ## Apps that must be built first
-			"BUILD_AFTER"       : PySet.Set(), ## Specific Tool/App pairs that must be run first
+			"BUILD_AFTER_TOOLS" : set(), ## ToolChains that must be run first
+			"BUILD_AFTER_APPS"  : set(), ## Apps that must be built first
+			"BUILD_AFTER"       : set(), ## Specific Tool/App pairs that must be run first
 
-			"DEPENDENCIES"      : PySet.Set(), ## Apps in seperate repositories
+			"DEPENDENCIES"      : set(), ## Apps in seperate repositories
 
-			"INCLUDE_DIRS"      : PySet.Set(), ## Directories that include files reside in
-			"LIB_DIRS"          : PySet.Set(), ## Directories prebuilt libraries exist in
+			"INCLUDE_DIRS"      : set(), ## Directories that include files reside in
+			"LIB_DIRS"          : set(), ## Directories prebuilt libraries exist in
 
 			"DOC_DIR"           : "doc",       ## Directory to install documentation into
 
@@ -60,7 +58,7 @@ class AppToolConfig(PyConfig.Config):
 			"INSTALL_PREFIX"    : "install",   ## Directory to install into
 
 			"TOOL_OPTIONS"      : {},
-			"TOOL_CLI_OPTIONS"  : PySet.Set(),
+			"TOOL_CLI_OPTIONS"  : set(),
 
 			"APP_OPTIONS"       : {},
 
@@ -83,10 +81,10 @@ class AppToolConfig(PyConfig.Config):
 
 	def parse(self, env_config, tool_config, app_config):
 		env_defaults  = {
-			"DEPENDENCIES"      : PySet.Set(), ## Apps in seperate repositories
+			"DEPENDENCIES"      : set(), ## Apps in seperate repositories
 
-			"INCLUDE_DIRS"      : PySet.Set(), ## Directories that include files reside in
-			"LIB_DIRS"          : PySet.Set(), ## Directories prebuilt libraries exist in
+			"INCLUDE_DIRS"      : set(), ## Directories that include files reside in
+			"LIB_DIRS"          : set(), ## Directories prebuilt libraries exist in
 
 			"DOC_DIR"           : "doc",       ## Directory to install documentation into
 
@@ -96,28 +94,28 @@ class AppToolConfig(PyConfig.Config):
 		}
 
 		tool_defaults = {
-			"BUILD_AFTER_TOOLS" : PySet.Set(), ## ToolChains that must be run first
+			"BUILD_AFTER_TOOLS" : set(), ## ToolChains that must be run first
 
-			"INCLUDE_DIRS"      : PySet.Set(), ## Directories that include files reside in
-			"LIB_DIRS"          : PySet.Set(), ## Directories prebuilt libraries exist in
+			"INCLUDE_DIRS"      : set(), ## Directories that include files reside in
+			"LIB_DIRS"          : set(), ## Directories prebuilt libraries exist in
 
 			"DOC_DIR"           : "doc",       ## Directory to install documentation into
 			"BUILD_PREFIX"      : "build",     ## Directory to place built files into
 
-			"TOOL_CLI_OPTIONS"  : PySet.Set(),
+			"TOOL_CLI_OPTIONS"  : set(),
 
 			"TOOL_OPTIONS"      : {}
 		}
 
 		app_defaults  = {
-			"BUILD_AFTER_APPS"  : PySet.Set(), ## Apps that must be built first
-			"BUILD_AFTER"       : PySet.Set(), ## Specific Tool/App pairs that must be run first
+			"BUILD_AFTER_APPS"  : set(), ## Apps that must be built first
+			"BUILD_AFTER"       : set(), ## Specific Tool/App pairs that must be run first
 
-			"DEPENDENCIES"      : PySet.Set(), ## Apps in seperate repositories
+			"DEPENDENCIES"      : set(), ## Apps in seperate repositories
 			
 			##
-			"INCLUDE_DIRS"      : PySet.Set(), ## Directories that include files reside in
-			"LIB_DIRS"          : PySet.Set(), ## Directories prebuilt libraries exist in
+			"INCLUDE_DIRS"      : set(), ## Directories that include files reside in
+			"LIB_DIRS"          : set(), ## Directories prebuilt libraries exist in
 			
 			"DOC_DIR"           : "doc",       ## Directory to install documentation into
 			"BUILD_PREFIX"      : "build",     ## Directory to place built files into

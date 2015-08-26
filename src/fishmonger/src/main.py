@@ -15,7 +15,6 @@ import pygraph       as PyGraph
 import pybase.config as PyConfig
 import pybase.find   as PyFind
 import pybase.util   as PyUtil
-import pybase.set    as PySet
 
 import pybase.log    as PyLog
 
@@ -72,7 +71,7 @@ class FishMonger():
 
 	def findAppDirs(self, parent=None, root=".", app_dirs=[]):
 		app_dirs.append((parent, root))
-		src_dir = os.path.join(root, "src")
+		src_dir   = os.path.join(root, "src")
 		PyLog.debug("Finding app dirs in ", src_dir, log_level=6)
 		
 		nparent = root
@@ -100,7 +99,7 @@ class FishMonger():
 		allconfig      = {t : {}        for t in tool_chains}
 
 		## Get the app directories
-		app_dirs       = self.findAppDirs(None, ".", PySet.Set())
+		app_dirs       = self.findAppDirs(None, ".", [])
 
 		## parent dir -> [child_dir]
 		children       = {}
@@ -111,12 +110,12 @@ class FishMonger():
 		env_config   = {}
 		tool_config  = {t : {} for t in tool_chains}
 		app_config   = {}
-		include_dirs = PySet.Set()
-		lib_dirs     = PySet.Set()
-		all_dep_dirs = PySet.Set()
+		include_dirs = set()
+		lib_dirs     = set()
+		all_dep_dirs = set()
 		for (parent, child) in app_dirs:
-			include_dirs.append(PyFind.findAllByPattern("*include*", root=child, dirs_only=True))
-			lib_dirs.append(    PyFind.findAllByPattern("*lib*",     root=child, dirs_only=True))
+			include_dirs |= set(PyFind.findAllByPattern("*include*", root=child, dirs_only=True))
+			lib_dirs     |= set(PyFind.findAllByPattern("*lib*",     root=child, dirs_only=True))
 
 			t_env_config  = {}
 			t_app_config  = {}
@@ -151,9 +150,10 @@ class FishMonger():
 
 				dep_dirs = [(".", self.retrieveCode(app_tool_config["DEP_DIR"], x, skip_update=app_tool_config["SKIP_UPDATE"])) for x in app_tool_config["DEPENDENCIES"]]
 				for (ignore, dep_dir) in dep_dirs:
-					t_dep_dirs = self.findAppDirs(".", dep_dir, PySet.Set())
-					all_dep_dirs.append([y for (x,y) in t_dep_dirs])
-					app_dirs.append(t_dep_dirs)
+					t_dep_dirs    = self.findAppDirs(".", dep_dir, [])
+					all_dep_dirs |= set(t_dep_dirs)					
+					new_dep_dirs  = all_dep_dirs - set(app_dirs)
+					app_dirs     += list(new_dep_dirs)
 
 		for tool in allconfig:
 			for child in allconfig[tool]:
@@ -199,7 +199,7 @@ class FishMonger():
 	## Once we do that we can setup the tool chains
 	def configureAction(self, tool_chains, action):
 		(external_tools, internal_tools) = tool_chains
-		tool_chains                      = external_tools + internal_tools
+		tool_chains                      = external_tools | internal_tools
 		## [Module] -> [ToolChain]
 		tool_chains    = [t.ToolChain() for t in tool_chains]
 		## [ToolChain] -> {String:ToolChain}
@@ -249,28 +249,28 @@ class FishMonger():
 		allconfig = usedconfig
 		PyLog.debug("Updated Config", allconfig, log_level=9)
 		
-		vertexes   = PySet.Set()
+		vertexes   = set()
 		for tool in allconfig:
 			for child in allconfig[tool]:
 				apptool = allconfig[tool][child]
 				name    = apptool.name()
 
 				## Build graph of dependencies
-				edges = PySet.Set()
+				edges = set()
 				root  = apptool.path(DF.source|DF.root)
 
 				## If we build after a tool we build after all nodes of that tool
-				after_tools = PySet.Set()
+				after_tools = set()
 				for t in apptool["BUILD_AFTER_TOOLS"]:
 					## Add an edge for each app that uses this tool
 					after_tools.append([(t, allconfig[t][a].name()) for a in allconfig[t]])
 					edges.append(after_tools)
 				PyLog.debug("After tools", after_tools, log_level=8)
-				edges.append(after_tools)
+				edges |= after_tools
 
 				## If we build after apps we build after them for each tool
 				## Since we're iterating for each tool we'll get to adding those nodes eventually
-				after_apps = PySet.Set()
+				after_apps = set()
 				for after in apptool["BUILD_AFTER_APPS"]:
 					## We may be told to build after ourself...
 					## Don't do that
@@ -281,13 +281,13 @@ class FishMonger():
 						after_apps.append((tool, after))
 
 				PyLog.debug("App and Afters", (tool, name), after_apps, log_level=8)
-				edges.append(after_apps)
+				edges |= after_apps
 
 				## Add specific requirements
-				edges.append(apptool["BUILD_AFTER"])
+				edges |= set(apptool["BUILD_AFTER"])
 
 				PyLog.debug("Edges", edges, log_level=8)
-				vertexes.append(PyGraph.Vertex((tool, name), edges, data={"tool":tool, "root":root}))
+				vertexes |= set([PyGraph.Vertex((tool, name), edges, data={"tool":tool, "root":root})])
 
 		sorted_vertexes = [v.name for v in vertexes]
 		sorted_vertexes.sort()
@@ -389,20 +389,20 @@ def main():
 	tools_for_all       = fishmonger.InternalToolChains
 	
 	actions = {}
-	actions["clean"]    = [(fish.clean, tools_for_all + fishmonger.CleanToolChains)]
+	actions["clean"]    = [(fish.clean, tools_for_all | fishmonger.CleanToolChains)]
 
 	actions["build"]    = [
-		(fish.generate, tools_for_all + fishmonger.GenerateToolChains),
-		(fish.build,    tools_for_all + fishmonger.BuildToolChains),
-		(fish.link,     tools_for_all + fishmonger.LinkToolChains)
+		(fish.generate, tools_for_all | fishmonger.GenerateToolChains),
+		(fish.build,    tools_for_all | fishmonger.BuildToolChains),
+		(fish.link,     tools_for_all | fishmonger.LinkToolChains)
 	]
 	actions["compile"]  = actions["build"]
 
-	actions["install"]  = [(fish.install,  tools_for_all + fishmonger.InstallToolChains)]
-	actions["doc"]      = [(fish.document, tools_for_all + fishmonger.DocumentToolChains)]
+	actions["install"]  = [(fish.install,  tools_for_all | fishmonger.InstallToolChains)]
+	actions["doc"]      = [(fish.document, tools_for_all | fishmonger.DocumentToolChains)]
 	actions["document"] = actions["doc"]
 	
-	actions["package"]  = [(fish.packageConfigure, None)] + actions["clean"] + actions["build"] + actions["install"] + [(fish.package, tools_for_all + fishmonger.PackageToolChains)]
+	actions["package"]  = [(fish.packageConfigure, None)] + actions["clean"] + actions["build"] + actions["install"] + [(fish.package, tools_for_all | fishmonger.PackageToolChains)]
 
 	actions["test"]     = [(None, [])]
 

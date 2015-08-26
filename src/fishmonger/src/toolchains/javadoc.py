@@ -1,7 +1,6 @@
 import pybase.sh   as PySH
 import pybase.find as PyFind
 import pybase.path as PyPath
-import pybase.set  as PySet
 import os.path
 
 import fishmonger

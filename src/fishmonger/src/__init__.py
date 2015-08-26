@@ -12,7 +12,6 @@ import pybase.path   as PyPath
 import pybase.util   as PyUtil
 import pybase.find   as PyFind
 import pyrcs         as PyRCS
-import pybase.set    as PySet
 import pybase.sh     as PySH
 
 import pybase.exception as PyExcept
@@ -158,18 +157,18 @@ class ToolChain(object):
 	def getApps(self):
 		return [app.name() for app in self.apps]
 
-AllToolChains      = PySet.Set()
+AllToolChains      = set()
 
-InternalToolChains = PySet.Set()
-ExternalToolChains = PySet.Set()
+InternalToolChains = set()
+ExternalToolChains = set()
 
-CleanToolChains    = PySet.Set()
-GenerateToolChains = PySet.Set()
-BuildToolChains    = PySet.Set()
-LinkToolChains     = PySet.Set()
-DocumentToolChains = PySet.Set()
-InstallToolChains  = PySet.Set()
-PackageToolChains  = PySet.Set()
+CleanToolChains    = set()
+GenerateToolChains = set()
+BuildToolChains    = set()
+LinkToolChains     = set()
+DocumentToolChains = set()
+InstallToolChains  = set()
+PackageToolChains  = set()
 
 def addToolChains(array, target, prefix=""):
 	if isinstance(array, basestring):
