@@ -84,22 +84,9 @@ class ToolChain(object):
 				else:
 					raise ToolChainException("Invalid %s cmd. Cmds must be string or fun: %s : %s" % (action, app, cmd))
 
-		except PyExcept.BaseException as e:
-			PyLog.increaseIndent()
-			PyLog.error(e)
-			PyLog.decreaseIndent()
-			PyLog.decreaseIndent()
-			return False
 		except Exception as e:
-			et, ei, tb = sys.exc_info()
-			PyLog.error("Error during %s" % action, exception=str(e))
-			PyLog.increaseIndent()
-			for line in traceback.format_tb(tb):
-				for t_line in line.strip().split("\n"):
-					PyLog.error(t_line)
 			PyLog.decreaseIndent()
-			PyLog.decreaseIndent()
-			return False
+			raise ToolChainException(None, trace=sys.exc_info())
 
 		PyLog.decreaseIndent()
 		return True

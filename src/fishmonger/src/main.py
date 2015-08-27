@@ -3,24 +3,30 @@ import sys
 
 import copy
 
+import Queue
 import signal
+
+import traceback
+
+import multiprocessing
 
 import fishmonger
 
 import fishmonger.config   as FC
 import fishmonger.dirflags as DF
 
-import pygraph       as PyGraph
+import pygraph          as PyGraph
 
-import pybase.config as PyConfig
-import pybase.find   as PyFind
-import pybase.util   as PyUtil
+import pybase.exception as PyExcept
+import pybase.config    as PyConfig
+import pybase.find      as PyFind
+import pybase.util      as PyUtil
 
-import pybase.log    as PyLog
+import pybase.log       as PyLog
 
-import pybase.path   as PyPath
+import pybase.path      as PyPath
 
-import pyrcs         as PyRCS
+import pyrcs            as PyRCS
 
 if sys.version_info < (2, 7):
 	raise "Requires python 2.7+"
@@ -30,6 +36,104 @@ def ctrl_c(signal, frame):
 	sys.exit(0)
 
 signal.signal(signal.SIGINT, ctrl_c)
+
+class BuildTask(multiprocessing.Process):
+	def __init__(self, key, action, app, clean_queue):
+		multiprocessing.Process.__init__(self)
+
+		self.key         = key
+		self.action      = action
+		self.app         = app
+
+		self.clean_queue = clean_queue
+
+	def run(self):
+		error = None
+		res   = False
+
+		try:
+			res = self.action(self.app)
+		except PyExcept.BaseException as e:
+			PyLog.increaseIndent()
+			PyLog.error(e)
+			PyLog.decreaseIndent()
+		except Exception as e:
+			et, ei, tb = sys.exc_info()
+			PyLog.error("Exception during %s%s" % (self.action, self.key), exception=str(e))
+			PyLog.increaseIndent()
+			for line in traceback.format_tb(tb):
+				for t_line in line.strip().split("\n"):
+					PyLog.error(t_line)
+			PyLog.decreaseIndent()
+
+		self.clean_queue.put((self.key, res))
+
+
+
+def runCommands(commands, dependencies, max_cores=1):
+	manager      = multiprocessing.Manager()
+	clean_queue  = manager.Queue()
+
+	used_cores   = 0
+
+	tasks        = {}
+
+	commands     = commands
+	dependencies = dependencies
+
+	run_tasks    = {}
+
+	command      = None
+
+	clean_key    = None
+	result       = True
+	while len(commands) > 0 and result == True:
+		## If we have no command start one
+		if command == None:
+			command = commands.pop(0)
+			PyLog.debug("Popped", command=command, log_level=9)
+
+		if used_cores < max_cores:
+			PyLog.debug("Have cores", used_cores=used_cores, max_cores=max_cores, log_level=9)
+			(key, action, app)  = command
+			if len(dependencies[key]) == 0:
+				PyLog.debug("Running Task", task=key, log_level=9)
+				t_task              = BuildTask(key, action, app, clean_queue)
+				tasks[key]          = t_task
+				run_tasks[key]      = (action, app)
+
+				PyLog.debug("Starting task", log_level=9)
+				t_task.start()
+
+				used_cores         += 1
+				command             = None
+
+				continue
+			else:
+				PyLog.debug("Waiting for dependencies", waiting=key, waiting_on=dependencies[key], log_level=9)
+		else:
+			PyLog.debug("Waiting on cores", used_cores=used_cores, max_cores=max_cores, log_level=9)
+
+		PyLog.debug("Waiting for a task to finish", log_level=9)
+		## If we have no cores wait until one is freed
+		(clean_key, result) = clean_queue.get()
+
+		PyLog.debug("Cleaning", clean_key=clean_key, result=result, log_level=9)
+		tasks[clean_key].join()
+		tasks[clean_key]  = None
+		used_cores       -= 1
+
+		for d in dependencies:
+			dependencies[d] -= set([clean_key])
+
+	for t in tasks:
+		if tasks[t] is not None:
+			tasks[t].terminate()
+			tasks[t].join()
+			tasks[t] = None
+
+	if not result:
+		sys.exit(1)
 
 class FishMongerException(Exception):
 	pass
@@ -176,11 +280,8 @@ class FishMonger():
 				else:
 					count = len(apptool.children)
 					for c in children[child]:
-					#	print "\t", os.path.join(c, "src")
 						if os.path.isdir(os.path.join(c, "src")):
 							count -= 1
-
-					#print "TYPE REDUX", len(apptool.children), count, apptool.name()
 
 					## We have children and all have a src dir; We're a project
 					if count == 0:
@@ -191,7 +292,7 @@ class FishMonger():
 
 		self.allconfig = allconfig
 		self.children  = children
-		PyLog.debug("Child map", children, log_level=1)
+		PyLog.debug("Child map", children, log_level=9)
 		PyLog.debug("Generated Config", allconfig, log_level=9)
 
 	## We have to detect the applicaiton folders and generate base app
@@ -249,28 +350,38 @@ class FishMonger():
 		allconfig = usedconfig
 		PyLog.debug("Updated Config", allconfig, log_level=9)
 		
-		vertexes   = set()
+		key_dependencies = {}
+
+		## Build dependency graph
+		digraph    = PyGraph.DiGraph()
+		edges      = set()
 		for tool in allconfig:
+			
 			for child in allconfig[tool]:
 				apptool = allconfig[tool][child]
 				name    = apptool.name()
+				root    = apptool.path(DF.source|DF.root)
+				t_edges = set()
 
-				## Build graph of dependencies
-				edges = set()
-				root  = apptool.path(DF.source|DF.root)
+				vertex_key = (tool, name)
+
+				key_dependencies[vertex_key] = set()
+
+				digraph.addVertex(PyGraph.Vertex(vertex_key, data={"tool":tool, "root":root}))
 
 				## If we build after a tool we build after all nodes of that tool
 				after_tools = set()
 				for t in apptool["BUILD_AFTER_TOOLS"]:
 					## Add an edge for each app that uses this tool
-					after_tools.append([(t, allconfig[t][a].name()) for a in allconfig[t]])
-					edges.append(after_tools)
-				PyLog.debug("After tools", after_tools, log_level=8)
-				edges |= after_tools
+					after_tools |= set([PyGraph.Edge((t, allconfig[t][a].name()), vertex_key, direction=PyGraph.EdgeDirection.LTR) for a in allconfig[t]])
+					key_dependencies[vertex_key] |= set([(t, allconfig[t][a].name()) for a in allconfig[t]])
 
+				PyLog.debug("After tools", vertex_key=vertex_key, build_after=after_tools, log_level=8)
+				t_edges |= after_tools
+				
 				## If we build after apps we build after them for each tool
 				## Since we're iterating for each tool we'll get to adding those nodes eventually
-				after_apps = set()
+				after_apps = []
 				for after in apptool["BUILD_AFTER_APPS"]:
 					## We may be told to build after ourself...
 					## Don't do that
@@ -278,32 +389,28 @@ class FishMonger():
 						PyLog.warning("Attemping to build ourself after ourself... This seems silly please fix that")
 						continue
 					if after in allconfig[tool]:
-						after_apps.append((tool, after))
+						after_apps.append(PyGraph.Edge((tool, after), vertex_key, direction=PyGraph.EdgeDirection.LTR))
 
 				PyLog.debug("App and Afters", (tool, name), after_apps, log_level=8)
-				edges |= after_apps
+				t_edges    |= set(after_apps)
+				key_dependencies[vertex_key] |= set([e.getOther(vertex_key) for e in t_edges])
 
 				## Add specific requirements
-				edges |= set(apptool["BUILD_AFTER"])
+				t_edges    |= set([PyGraph.Edge(x, vertex_key, direction=PyGraph.EdgeDirection.LTR) for x in apptool["BUILD_AFTER"]])
+				key_dependencies[vertex_key] |= set([x for x in apptool["BUILD_AFTER"]])
+			
+				edges |= t_edges
 
-				PyLog.debug("Edges", edges, log_level=8)
-				vertexes |= set([PyGraph.Vertex((tool, name), edges, data={"tool":tool, "root":root})])
+		for edge in edges:
+			digraph.addEdge(edge)
 
-		sorted_vertexes = [v.name for v in vertexes]
-		sorted_vertexes.sort()
-		PyLog.debug("Vertexes", sorted_vertexes, log_level=5)
-
-		## Graph the vertexes
-		digraph    = PyGraph.DiGraph(vertexes)
-		
 		## Get order and strip out values we want
 		taskorders = digraph.topologicalOrder()
-		## Correct order
-		taskorders.reverse()
+		
+		PyLog.debug("Build order", taskorders, log_level=8)
 
-		PyLog.debug("Build order", taskorders, log_level=7)
-
-		self.command_list = [(getattr(tool_chains[digraph[order]["tool"]], action), allconfig[digraph[order]["tool"]][digraph[order]["root"]]) for order in taskorders]
+		self.command_list = [(order, getattr(tool_chains[digraph[order]["tool"]], action), allconfig[digraph[order]["tool"]][digraph[order]["root"]]) for order in taskorders]
+		self.command_dependencies = key_dependencies
 
 	## We have to detect the applicaiton folders and generate base app
 	## configurations here. Caling doConfigure will fill in the blanks.
@@ -313,60 +420,62 @@ class FishMonger():
 			for child in self.allconfig[tool]:
 				self.allconfig[tool][child].package = True
 
-	def runAction(self):
-		for (action, app) in self.command_list:
-			res = action(app)
-			if res == False:
-				PyLog.error("Action returned failure", action, app)
-				sys.exit(1)
+	def runAction(self, max_cores=1):
+		runCommands(self.command_list, self.command_dependencies, max_cores=max_cores)
 
-	def build(self, tools):
+		#for (key, action, app) in self.command_list:
+		#	res = action(app)
+		#	if res == False:
+		#		PyLog.error("Action returned failure", action, app)
+		#		sys.exit(1)
+
+	def build(self, tools, **kwargs):
 		PyLog.log("Building")
 		PyLog.increaseIndent()
 		self.configureAction(tools, "build")
-		self.runAction()
+		self.runAction(**kwargs)
 		PyLog.decreaseIndent()
 
-	def install(self, tools):
+	def install(self, tools, **kwargs):
 		PyLog.log("Installing")
 		PyLog.increaseIndent()
 		self.configureAction(tools, "install")
-		self.runAction()
+		self.runAction(**kwargs)
 		PyLog.decreaseIndent()
 
-	def document(self, tools):
+	def document(self, tools, **kwargs):
 		PyLog.log("Documenting")
 		PyLog.increaseIndent()
 		self.configureAction(tools, "document")
-		self.runAction()
+		self.runAction(**kwargs)
 		PyLog.decreaseIndent()
 
-	def clean(self, tools):
+	def clean(self, tools, **kwargs):
 		PyLog.log("Cleaning")
 		PyLog.increaseIndent()
 		self.configureAction(tools, "clean")
-		self.runAction()
+		self.runAction(**kwargs)
 		PyLog.decreaseIndent()
 
-	def generate(self, tools):
+	def generate(self, tools, **kwargs):
 		PyLog.log("Generating")
 		PyLog.increaseIndent()
 		self.configureAction(tools, "generate")
-		self.runAction()
+		self.runAction(**kwargs)
 		PyLog.decreaseIndent()
 
-	def link(self, tools):
+	def link(self, tools, **kwargs):
 		PyLog.log("Linking")
 		PyLog.increaseIndent()
 		self.configureAction(tools, "link")
-		self.runAction()
+		self.runAction(**kwargs)
 		PyLog.decreaseIndent()
 
-	def package(self, tools):
+	def package(self, tools, **kwargs):
 		PyLog.log("Packaging")
 		PyLog.increaseIndent()
 		self.configureAction(tools, "package")
-		self.runAction()
+		self.runAction(**kwargs)
 		PyLog.decreaseIndent()
 
 def main():
@@ -428,12 +537,16 @@ def main():
 	if "package" in cli_actions:
 		cli_actions = ["package"]
 
+	global_args = {
+		"max_cores" : int(cli["MAX_CORES"]) if "MAX_CORES" in cli else multiprocessing.cpu_count()
+	}
+
 	run_actions = []
 	for action in cli_actions:
 		tasks = actions[action]
 		for (task, tools) in tasks:
 			if task not in run_actions:
 				run_actions.append(task)
-				task((fishmonger.ExternalToolChains, tools))
+				task((fishmonger.ExternalToolChains, tools), **global_args)
 		
 main()

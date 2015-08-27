@@ -29,27 +29,26 @@ clone-libs:
 	@git clone git+ssh://git.rleszilm.com/data/git/pygraph.git  py-deps/pygraph
 
 fishmonger-libs: python-libs
-	@rm -rf py-libs/fishmonger
-	@mkdir -p py-libs/fishmonger
-	@cp -r src/fishmonger/src/* py-libs/fishmonger
+	@rm    -rf py-libs/fishmonger
+	@mkdir -p  py-libs/fishmonger
+	@cp    -r  src/fishmonger/src/* py-libs/fishmonger
 
 python-libs:
-	rm -rf py-libs
+	@rm    -rf py-libs
 
-	@mkdir -p py-libs
+	@mkdir -p  py-libs
 	
-	@mkdir -p py-libs/pybase
-	@cp -r py-deps/pybase/src/* py-libs/pybase
+	@mkdir -p  py-libs/pybase
+	@cp    -r  py-deps/pybase/src/* py-libs/pybase
 	
-	@mkdir -p py-libs/pyerl
-	@cp -r py-deps/pyerl/src/* py-libs/pyerl
+	@mkdir -p  py-libs/pyerl
+	@cp    -r  py-deps/pyerl/src/* py-libs/pyerl
 	
-	@mkdir -p py-libs/pyrcs
-	@cp -r py-deps/pyrcs/src/* py-libs/pyrcs
+	@mkdir -p  py-libs/pyrcs
+	@cp    -r  py-deps/pyrcs/src/* py-libs/pyrcs
 	
-	@mkdir -p py-libs/pygraph
-	@cp -r py-deps/pygraph/src/* py-libs/pygraph
-
+	@mkdir -p  py-libs/pygraph
+	@cp    -r  py-deps/pygraph/src/* py-libs/pygraph
 
 update-libs:
 	@cd py-deps/pybase   && git pull
