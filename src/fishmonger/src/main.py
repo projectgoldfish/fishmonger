@@ -68,73 +68,6 @@ class BuildTask(multiprocessing.Process):
 
 		self.clean_queue.put((self.key, res))
 
-
-
-def runCommands(commands, dependencies, max_cores=1):
-	manager      = multiprocessing.Manager()
-	clean_queue  = manager.Queue()
-
-	used_cores   = 0
-
-	tasks        = {}
-
-	commands     = commands
-	dependencies = dependencies
-
-	run_tasks    = {}
-
-	command      = None
-
-	clean_key    = None
-	result       = True
-	while len(commands) > 0 and result == True:
-		## If we have no command start one
-		if command == None:
-			command = commands.pop(0)
-			PyLog.debug("Popped", command=command, log_level=9)
-
-		if used_cores < max_cores:
-			PyLog.debug("Have cores", used_cores=used_cores, max_cores=max_cores, log_level=9)
-			(key, action, app)  = command
-			if len(dependencies[key]) == 0:
-				PyLog.debug("Running Task", task=key, log_level=9)
-				t_task              = BuildTask(key, action, app, clean_queue)
-				tasks[key]          = t_task
-				run_tasks[key]      = (action, app)
-
-				PyLog.debug("Starting task", log_level=9)
-				t_task.start()
-
-				used_cores         += 1
-				command             = None
-
-				continue
-			else:
-				PyLog.debug("Waiting for dependencies", waiting=key, waiting_on=dependencies[key], log_level=9)
-		else:
-			PyLog.debug("Waiting on cores", used_cores=used_cores, max_cores=max_cores, log_level=9)
-
-		PyLog.debug("Waiting for a task to finish", log_level=9)
-		## If we have no cores wait until one is freed
-		(clean_key, result) = clean_queue.get()
-
-		PyLog.debug("Cleaning", clean_key=clean_key, result=result, log_level=9)
-		tasks[clean_key].join()
-		tasks[clean_key]  = None
-		used_cores       -= 1
-
-		for d in dependencies:
-			dependencies[d] -= set([clean_key])
-
-	for t in tasks:
-		if tasks[t] is not None:
-			tasks[t].terminate()
-			tasks[t].join()
-			tasks[t] = None
-
-	if not result:
-		sys.exit(1)
-
 class FishMongerException(Exception):
 	pass
 
@@ -421,13 +354,85 @@ class FishMonger():
 				self.allconfig[tool][child].package = True
 
 	def runAction(self, max_cores=1):
-		runCommands(self.command_list, self.command_dependencies, max_cores=max_cores)
+		manager          = multiprocessing.Manager()
+		clean_queue      = manager.Queue()
 
-		#for (key, action, app) in self.command_list:
-		#	res = action(app)
-		#	if res == False:
-		#		PyLog.error("Action returned failure", action, app)
-		#		sys.exit(1)
+		used_cores       = 0
+
+		tasks            = {}
+
+		commands         = self.command_list
+		dependencies     = self.command_dependencies
+
+		command          = None
+
+		result           = True
+
+		dependency_block = False
+		while len(commands) > 0 and result == True:
+			## If we have no command start one
+			if command == None:
+				dependency_block = False
+
+				## Get the first command that has no dependencies outstanding
+				for x in range(len(commands)):
+					t_key = commands[x][0]
+					if len(dependencies[t_key]) == 0:
+						command = commands.pop(x)
+						break
+
+				if command == None:
+					dependency_block = True
+				
+			## If we have a command AND we have available cores build/dispatch the task
+			if used_cores < max_cores and command != None:
+				PyLog.debug("Have cores", used_cores=used_cores, max_cores=max_cores, log_level=9)
+				
+				(key, action, app)  = command
+				PyLog.debug("Running Task", task=key, log_level=9)
+				t_task              = BuildTask(key, action, app, clean_queue)
+				tasks[key]          = t_task
+				
+				PyLog.debug("Starting task", log_level=9)
+				t_task.start()
+
+				used_cores         += 1
+				command             = None
+
+				continue
+			else:
+				PyLog.debug("Waiting on cores or command dependencies", used_cores=used_cores, max_cores=max_cores, command=command, log_level=9)
+
+			## If we ever get to the point where we could not get a command AND no tasks are running
+			##   There must be some error in the build dependencies
+			##   Halt the system in error as we'll never take another action
+			if used_cores == 0 and command == None and len(commands) != 0:
+				PyLog.error("No commands can be built and no tasks are pending. Halting.", commands=commands, dependencies=dependencies)
+				sys.exit(1)
+
+			## If we have no cores OR
+			## If we have remaining commands OR
+			## If we are dependency blocked
+			if used_cores == max_cores or len(commands) == 0 or dependency_block == True:		
+				PyLog.debug("Waiting for a task to finish", cores=used_cores==max_cores, commands=len(commands), dependency_block=dependency_block, log_level=9)
+				(clean_key, result) = clean_queue.get()
+
+				PyLog.debug("Cleaning", clean_key=clean_key, result=result, log_level=9)
+				tasks[clean_key].join()
+				tasks[clean_key]  = None
+				used_cores       -= 1
+
+				for d in dependencies:
+					dependencies[d] -= set([clean_key])
+
+		for t in tasks:
+			if tasks[t] is not None:
+				tasks[t].terminate()
+				tasks[t].join()
+				tasks[t] = None
+
+		if not result:
+			sys.exit(1)
 
 	def build(self, tools, **kwargs):
 		PyLog.log("Building")
