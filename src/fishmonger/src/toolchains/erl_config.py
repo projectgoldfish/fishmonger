@@ -33,7 +33,7 @@ class ToolChain(fishmonger.ToolChain):
 		PyErl.write_file(config_file, doc)
 
 	def __init__(self):
-		self.extensions = ["erl"]
+		self.src_exts   = ["erl"]
 		self.defaults   = {
 			"BUILD_AFTER_TOOLS" : ["erl_app"],
 			"TOOL_OPTIONS"      : {

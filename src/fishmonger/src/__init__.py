@@ -18,6 +18,8 @@ import pybase.exception as PyExcept
 
 import pybase.log    as PyLog
 
+import pickle
+
 import traceback
 
 class ToolChainException(PyExcept.BaseException):
@@ -37,19 +39,14 @@ class ToolChain(object):
 		if not hasattr(self, "defaults"):
 			self.defaults = {}
 
-		if not hasattr(self, "extensions"):
-			raise ToolChainException("%s MUST define a list of extensions during __init__!" % self.__class__)
-		elif not isinstance(self.extensions, list):
-			raise ToolChainException("%s MUST define a list of extensions during __init__!" % self.__class__)
+		elif not isinstance(self.src_exts, list):
+			raise ToolChainException("%s MUST define a list of src_exts during __init__!" % self.__class__)
 
 		src_configs = []
 		for child in [app] + app.children:
 			PyLog.debug("Looking in", child.path(DF.source|DF.src), log_level=6)
 
-			src_files = PyFind.findAllByExtensions(self.extensions, child.path(DF.source|DF.src), root_only=False)
-			PyLog.debug("Found Files", src_files, log_level=6)
-			if len(src_files) != 0:
-				## Update the tool chain config based on this applications specific toolchain config.				
+			if child.used():
 				src_configs.append(child)
 		
 		## Return the list of apps used
@@ -61,9 +58,20 @@ class ToolChain(object):
 
 		PyLog.increaseIndent()
 	
+
+		file_stats = {}
 		try:
+			## Check if we're up to date
+			file_stats = app.fileStats()
+			updated    = updatedFiles(file_stats)
+			if len(updated) == 0:
+				print "UPTODATE"
+				PyLog.log("Up to date")
+				PyLog.decreaseIndent()
+				return True
+
 			cmds = []
-			
+
 			## If no children but we're being built
 			## We must just be a shallow app.
 			for child in [app] + app.children:
@@ -73,6 +81,7 @@ class ToolChain(object):
 					cmds += t_cmds
 		
 			if not cmds:
+				print "No Commands"
 				PyLog.decreaseIndent()
 				return True
 			for cmd in cmds:
@@ -87,6 +96,9 @@ class ToolChain(object):
 		except Exception as e:
 			PyLog.decreaseIndent()
 			raise ToolChainException(None, trace=sys.exc_info())
+
+		print "Sage"
+		saveFileStats(file_stats)
 
 		PyLog.decreaseIndent()
 		return True
@@ -208,9 +220,39 @@ addToolChains(fishmonger.toolchains.document(), DocumentToolChains, "fishmonger.
 addToolChains(fishmonger.toolchains.install(),  InstallToolChains,  "fishmonger.toolchains")
 addToolChains(fishmonger.toolchains.package(),  PackageToolChains,  "fishmonger.toolchains")
 
+FileStats = {}
 
+def loadFileStats():
+	if os.path.isfile(".fishmonger.pickle"):
+		f = open(".fishmonger.pickle", "r")
+		FileStats = pickle.load(f)
+		f.close()
 
+def saveFileStats(stats):
+	print "Save", stats
 
+	for stat in stats:
+		if stat not in FileStats:
+			FileStats[stat] = stats[stat]
+
+	f = open(".fishmonger.pickle", "w")
+	pickle.dump(FileStats, f)
+	f.close()
+
+def updatedFiles(files):
+	updated_files = []
+
+	#print "Updates"
+	for f in files:
+		if f not in FileStats:
+			updated_files.append(f)
+		elif files[f].st_mtime > FileStats[f].st_mtime:
+			print "N|",files[f],"|\nO|",FileStats[f],"|"
+			updated_files.append(f)
+
+	return files
+
+loadFileStats()
 
 
 

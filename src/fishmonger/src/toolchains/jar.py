@@ -7,7 +7,7 @@ import fishmonger
 
 class ToolChain(fishmonger.ToolChain):
 	def __init__(self):
-		self.extensions = ["class"]
+		self.src_exts   = ["class"]
 		self.defaults   = {
 			"BUILD_DIR"  : "js"
 		}

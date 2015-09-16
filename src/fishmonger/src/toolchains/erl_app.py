@@ -89,7 +89,7 @@ class ToolChain(fishmonger.ToolChain):
 				PySH.copy(app_src, app_file, dst_type="file", force=True)
 
 	def __init__(self):
-		self.extensions = ["erl"]
+		self.src_exts   = ["erl"]
 		self.defaults   = {
 			"BUILD_AFTER_TOOLS" : ["rebar"],
 			"TOOL_OPTIONS"      : {

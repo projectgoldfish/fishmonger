@@ -16,6 +16,7 @@ import pyrcs       as PyRCS
 
 class ToolChain(fishmonger.ToolChain):
 	def __init__(self):
+		self.src_exts   = []
 		self.defaults   = {}
 
 	def uses(self, app):

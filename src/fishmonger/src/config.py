@@ -1,13 +1,15 @@
 
-import pyrcs         as PyRCS
-import pybase.config as PyConfig
+import pyrcs            as PyRCS
+import pybase.config    as PyConfig
 
-import pybase.path   as PyPath
-import pybase.find   as PyFind
+import pybase.exception as PyExcept
 
-import pybase.kwargs as PyKWArgs
+import pybase.path      as PyPath
+import pybase.find      as PyFind
 
-import pybase.log    as PyLog
+import pybase.kwargs    as PyKWArgs
+
+import pybase.log       as PyLog
 
 import os.path
 
@@ -21,12 +23,17 @@ import fishmonger.dirflags as DF
 #		r_ds |= set(t_d.split(""))
 #	return 
 
+class FishmongerConfigException(PyExcept.BaseException):
+	pass
+
 class AppToolConfig(PyConfig.Config):
 	class Types:
 		project, app, subdir = range(0, 3)
-	def __init__(self, dir, *args):
 
+	def __init__(self, tool, dir, src_exts, include_exts, include_pattern, *args):
 		PyLog.debug("AppToolConfig created for", dir, *args, log_level=6)
+		
+		self.tool         = tool
 		self.type         = AppToolConfig.Types.project
 		self.dependency   = False
 
@@ -77,7 +84,40 @@ class AppToolConfig(PyConfig.Config):
 		self.allowed      = {x : True for x in self.defaults}
 
 		self.set_behavior = PyConfig.ConfigSetBehavior.merge
+
+		self.src_exts        = src_exts
+
+		if src_exts == None:
+			raise FishmongerConfigException("Toolchains MUST have src_exts defined", tool=self.tool, app=self.name())
+
+		self.include_exts    = include_exts
+		self.include_pattern = include_pattern
+
 		self.parse(*args)
+
+	def used(self):
+		if len(self.src_exts) == 0:
+			return False
+		return len(PyFind.findAllByExtensions(self.src_exts, self.path(DF.source|DF.src), root_only=False)) != 0			
+
+	def files(self):
+		if len(self.src_exts) == 0:
+			return []
+		
+		files = PyFind.findAllByExtensions(self.src_exts, self.path(DF.source|DF.src), root_only=False)
+		
+		if self.include_exts != None and self.include_pattern != None:
+			##TODO: use pattern to parse out include files
+			pass
+		return files
+
+	def fileStats(self):
+		files = self.files()
+		
+		stats = {}
+		for f in files:
+			stats[f] = os.stat(f)
+		return stats
 
 	def parse(self, env_config, tool_config, app_config):
 		env_defaults  = {

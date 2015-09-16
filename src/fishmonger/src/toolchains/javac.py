@@ -7,7 +7,7 @@ import pybase.sh            as PySH
 
 class ToolChain(fishmonger.ToolChain):
 	def __init__(self):
-		self.extensions = ["java"]
+		self.src_exts   = ["java"]
 		self.defaults   = {
 			"DOC_DIR"  : "java"
 		}

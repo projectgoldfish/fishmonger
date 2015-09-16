@@ -104,7 +104,7 @@ class ToolChain(fishmonger.ToolChain):
 			PySH.copy(var_dir, install_var_dir, force=True)
 
 	def __init__(self):
-		self.extensions = ["erl"]
+		self.src_exts   = ["erl"]
 		self.defaults   = {
 			"BUILD_AFTER_TOOLS" : ["erl_app"],
 			"TOOL_OPTIONS"      : {

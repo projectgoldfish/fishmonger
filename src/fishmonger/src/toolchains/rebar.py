@@ -11,6 +11,7 @@ import fishmonger.dirflags as DF
 
 class ToolChain(fishmonger.ToolChain):
 	def __init__(self):
+		self.src_exts = []
 		self.defaults = {
 		}
 

@@ -14,7 +14,7 @@ class ToolChain(fishmonger.ToolChain):
 		self.defaults   = {
 			"APPLICATION" : False
 		}
-		self.extensions = ["py"]
+		self.src_exts   = ["py"]
 
 	def buildApp(self, child, app):
 		self.buildLibrary(child)

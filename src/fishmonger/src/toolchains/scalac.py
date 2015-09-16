@@ -6,7 +6,7 @@ class ToolChain(fishmonger.ToolChain):
 
 		print "SCAVAC"
 
-		self.extensions = ["scala"]
+		self.src_exts   = ["scala"]
 		self.defaults   = {
 			"DOC_DIR"  : "scala"
 		}

@@ -13,7 +13,7 @@ class ToolChain(fishmonger.ToolChain):
 	## Return True if we are used, false if not
 
 	def __init__(self):
-		self.extensions = ["js"]
+		self.src_exts   = ["js"]
 		self.defaults   = {
 		}
 

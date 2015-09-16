@@ -68,7 +68,7 @@ class BuildTask(multiprocessing.Process):
 
 		self.clean_queue.put((self.key, res))
 
-class FishMongerException(Exception):
+class FishmongerException(PyExcept.BaseException):
 	pass
 
 class FishMonger():
@@ -172,18 +172,27 @@ class FishMonger():
 				tool_config[tool][child] = ntool_config
 				app_config[child]        = napp_config
 
+				src_exts                 = tool_chains[tool].src_exts        if hasattr(tool_chains[tool], "src_exts")        else None
+				include_exts             = tool_chains[tool].include_exts    if hasattr(tool_chains[tool], "include_exts")    else None
+				include_pattern          = tool_chains[tool].include_pattern if hasattr(tool_chains[tool], "include_pattern") else None
+
 				app_tool_config          = FC.AppToolConfig(
+					tool,
 					child,
+					src_exts,
+					include_exts,
+					include_pattern,
 					nenv_config,
 					ntool_config,
 					napp_config
 				)
+
 				if parent in allconfig[tool]:
 					app_tool_config.parent   = allconfig[tool][parent]
 					app_tool_config.src_root = allconfig[tool][parent]._dir
 					allconfig[tool][parent].children.append(app_tool_config)
 
-				allconfig[tool][child]   = app_tool_config
+				allconfig[tool][child] = app_tool_config
 
 				dep_dirs = [(".", self.retrieveCode(app_tool_config["DEP_DIR"], x, skip_update=app_tool_config["SKIP_UPDATE"])) for x in app_tool_config["DEPENDENCIES"]]
 				for (ignore, dep_dir) in dep_dirs:
@@ -198,7 +207,7 @@ class FishMonger():
 				allconfig[tool][child]["LIB_DIRS"]     = lib_dirs
 
 			## Update types
-			for child in children:
+			##for child in allconfig[tool]:
 				apptool = allconfig[tool][child]
 
 				if apptool._dir in all_dep_dirs:
@@ -289,7 +298,6 @@ class FishMonger():
 		digraph    = PyGraph.DiGraph()
 		edges      = set()
 		for tool in allconfig:
-			
 			for child in allconfig[tool]:
 				apptool = allconfig[tool][child]
 				name    = apptool.name()
@@ -340,7 +348,7 @@ class FishMonger():
 		## Get order and strip out values we want
 		taskorders = digraph.topologicalOrder()
 		
-		PyLog.debug("Build order", taskorders, log_level=8)
+		PyLog.debug("Build order", taskorders, log_level=6)
 
 		self.command_list = [(order, getattr(tool_chains[digraph[order]["tool"]], action), allconfig[digraph[order]["tool"]][digraph[order]["root"]]) for order in taskorders]
 		self.command_dependencies = key_dependencies

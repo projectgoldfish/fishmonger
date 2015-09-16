@@ -9,7 +9,7 @@ import fishmonger
 
 class ToolChain(fishmonger.ToolChain):
 	def __init__(self):
-		self.extensions = ["erl"]
+		self.src_exts   = ["erl"]
 		self.defaults   = {}
 
 	def documentApp(self, child, app):

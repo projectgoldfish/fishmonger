@@ -1,7 +1,7 @@
 INSTALL_PREFIX=install
 
 all: fishmonger-libs
-	PYTHONPATH=${PYTHONPATH}:py-libs python ./src/fishmonger/src/main.py compile install --SKIP_UPDATE True
+	PYTHONPATH=${PYTHONPATH}:py-libs python ./src/fishmonger/src/main.py compile install --MAX_CORES 1 --SKIP_UPDATE True
 
 full: fishmonger-libs
 	PYTHONPATH=${PYTHONPATH}:py-libs python ./src/fishmonger/src/main.py install

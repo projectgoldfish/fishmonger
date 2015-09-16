@@ -18,7 +18,7 @@ class ToolChain(fishmonger.ToolChain):
 	## Generate language specific configuration
 	## Return True if we are used, false if not
 	def __init__(self):
-		self.extensions = ["erl"]
+		self.src_exts   = ["erl"]
 		self.defaults   = {
 		}
 

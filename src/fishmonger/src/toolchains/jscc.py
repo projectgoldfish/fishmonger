@@ -10,7 +10,7 @@ class ToolChain(fishmonger.ToolChain):
 		self.defaults   = {
 			"BUILD_DIR" : "js"
 		}
-		self.extensions = ["js"]
+		self.src_exts   = ["js"]
 	
 	def buildApp(self, app):
 		includes = ".:${JSCC_INCLUDE_DIRS}"
