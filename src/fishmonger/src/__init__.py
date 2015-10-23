@@ -65,7 +65,6 @@ class ToolChain(object):
 			file_stats = app.fileStats()
 			updated    = updatedFiles(file_stats)
 			if len(updated) == 0:
-				print "UPTODATE"
 				PyLog.log("Up to date")
 				PyLog.decreaseIndent()
 				return True
@@ -81,7 +80,6 @@ class ToolChain(object):
 					cmds += t_cmds
 		
 			if not cmds:
-				print "No Commands"
 				PyLog.decreaseIndent()
 				return True
 			for cmd in cmds:
@@ -97,7 +95,6 @@ class ToolChain(object):
 			PyLog.decreaseIndent()
 			raise ToolChainException(None, trace=sys.exc_info())
 
-		print "Sage"
 		saveFileStats(file_stats)
 
 		PyLog.decreaseIndent()
@@ -229,8 +226,6 @@ def loadFileStats():
 		f.close()
 
 def saveFileStats(stats):
-	print "Save", stats
-
 	for stat in stats:
 		if stat not in FileStats:
 			FileStats[stat] = stats[stat]
@@ -247,7 +242,6 @@ def updatedFiles(files):
 		if f not in FileStats:
 			updated_files.append(f)
 		elif files[f].st_mtime > FileStats[f].st_mtime:
-			print "N|",files[f],"|\nO|",FileStats[f],"|"
 			updated_files.append(f)
 
 	return files

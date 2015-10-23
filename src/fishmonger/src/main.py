@@ -136,7 +136,7 @@ class FishMonger():
 		allconfig      = {t : {}        for t in tool_chains}
 
 		## Get the app directories
-		app_dirs       = self.findAppDirs(None, ".", [])
+		app_dirs       = self.findAppDirs(None, "../" + os.getcwd().split("/")[-1], [])
 
 		## parent dir -> [child_dir]
 		children       = {}
@@ -348,7 +348,7 @@ class FishMonger():
 		## Get order and strip out values we want
 		taskorders = digraph.topologicalOrder()
 		
-		PyLog.debug("Build order", taskorders, log_level=6)
+		PyLog.debug("Build order", taskorders, log_level=9)
 
 		self.command_list = [(order, getattr(tool_chains[digraph[order]["tool"]], action), allconfig[digraph[order]["tool"]][digraph[order]["root"]]) for order in taskorders]
 		self.command_dependencies = key_dependencies
@@ -377,8 +377,17 @@ class FishMonger():
 		result           = True
 
 		dependency_block = False
-		while len(commands) > 0 and result == True:
-			## If we have no command start one
+		while True:
+			## We continue to process as long as we haven't failed
+			## And as long as we have a command left to spawn
+			if result != True:
+				PyLog.debug("Result false", log_level=6)
+				break
+			elif len(commands) == 0 and command == None:
+				PyLog.debug("Comamnd Stats", commands=commands, command=command, log_level=6)
+				break
+						
+			## If we have no command extract one
 			if command == None:
 				dependency_block = False
 
@@ -389,6 +398,7 @@ class FishMonger():
 						command = commands.pop(x)
 						break
 
+				PyLog.debug("Fetched Command", command=command, log_level=6)
 				if command == None:
 					dependency_block = True
 				
@@ -409,7 +419,7 @@ class FishMonger():
 
 				continue
 			else:
-				PyLog.debug("Waiting on cores or command dependencies", used_cores=used_cores, max_cores=max_cores, command=command, log_level=9)
+				PyLog.debug("Waiting on cores or command dependencies", used_cores=used_cores, max_cores=max_cores, command=command, log_level=6)
 
 			## If we ever get to the point where we could not get a command AND no tasks are running
 			##   There must be some error in the build dependencies
@@ -422,10 +432,10 @@ class FishMonger():
 			## If we have remaining commands OR
 			## If we are dependency blocked
 			if used_cores == max_cores or len(commands) == 0 or dependency_block == True:		
-				PyLog.debug("Waiting for a task to finish", cores=used_cores==max_cores, commands=len(commands), dependency_block=dependency_block, log_level=9)
+				PyLog.debug("Waiting for a task to finish", cores=used_cores==max_cores, commands=len(commands), dependency_block=dependency_block, log_level=6)
 				(clean_key, result) = clean_queue.get()
 
-				PyLog.debug("Cleaning", clean_key=clean_key, result=result, log_level=9)
+				PyLog.debug("Cleaning", clean_key=clean_key, result=result, log_level=6)
 				tasks[clean_key].join()
 				tasks[clean_key]  = None
 				used_cores       -= 1
@@ -435,7 +445,9 @@ class FishMonger():
 
 		for t in tasks:
 			if tasks[t] is not None:
-				tasks[t].terminate()
+				PyLog.debug("Joining", task=t, log_level=6)
+				if result != True:
+					tasks[t].terminate()
 				tasks[t].join()
 				tasks[t] = None
 

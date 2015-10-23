@@ -2,4 +2,5 @@
 py-deps/
 py-libs/*
 install/*
-dep/*
+deps/*
+build/*

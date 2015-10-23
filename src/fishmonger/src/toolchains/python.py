@@ -51,9 +51,9 @@ class ToolChain(fishmonger.ToolChain):
 		build_dir  = child.path(DF.build|DF.langlib|DF.app, lang="python")
 		source_dir = child.path(DF.source|DF.src)
 
-		PyLog.debug("Copy " + source_dir + " -> " + build_dir, log_level=6)
+		PyLog.debug("BUILD Copy " + source_dir + " -> " + build_dir, log_level=6)
 
-		PySH.copy(source_dir, build_dir, pattern="*.py", force=True, root_only=True)
+		PySH.copy(source_dir, build_dir, pattern="*.py", force=True, root_only=False)
 				
 	def installApp(self, child, app):
 		self.installLibrary(child)
@@ -68,9 +68,9 @@ class ToolChain(fishmonger.ToolChain):
 		build_dir   = child.path(DF.build|DF.langlib|DF.app,   lang="python")
 		install_dir = child.path(DF.install|DF.langlib|DF.app, lang="python")
 
-		PyLog.debug("Copy " + build_dir + " -> " + install_dir, log_level=6)
+		PyLog.debug("INSTALL Copy " + build_dir + " -> " + install_dir, log_level=6)
 
-		PySH.copy(build_dir, install_dir, pattern="*.py", force=True, root_only=True)
+		PySH.copy(build_dir, install_dir, pattern="*.py", force=True, root_only=False)
 
 	def installApplication(self, child):
 		install_dir    = child.path(DF.install|DF.root|DF.absolute)
