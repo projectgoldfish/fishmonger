@@ -53,5 +53,5 @@ class ToolChain(fishmonger.ToolChain):
 		for (dep_name, dep_dir) in [(os.path.basename(d_root), d_root) for d_root in dep_roots]:
 			for dir in ["ebin", "priv"]:
 				install_erl_dir = app.path(DF.install|DF.langlib|DF.app|DF.version, lang="erlang", subdirs=[dir], dep_name=dep_name, dep_dir=dep_dir)
-				PySH.copy(app.path(DF.source|DF.root, subdirs=[dir], dep_name=dep_name, dep_dir=dep_dir), install_erl_dir, force=True)
+				PySH.copy(os.path.join(dep_dir, dir), install_erl_dir, force=True)
 
