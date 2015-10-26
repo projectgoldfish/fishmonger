@@ -58,12 +58,12 @@ class ToolChain(object):
 
 		PyLog.increaseIndent()
 	
-
 		file_stats = {}
 		try:
 			## Check if we're up to date
 			file_stats = app.fileStats()
 			updated    = updatedFiles(file_stats)
+
 			if len(updated) == 0:
 				PyLog.log("Up to date")
 				PyLog.decreaseIndent()
@@ -91,8 +91,11 @@ class ToolChain(object):
 				else:
 					raise ToolChainException("Invalid %s cmd. Cmds must be string or fun: %s : %s" % (action, app, cmd))
 
-		except Exception as e:
+		except PyExcept.BaseException as e:
 			PyLog.decreaseIndent()
+			raise e
+
+		except Exception as e:
 			raise ToolChainException(None, trace=sys.exc_info())
 
 		saveFileStats(file_stats)

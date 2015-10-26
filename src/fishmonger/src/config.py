@@ -113,7 +113,6 @@ class AppToolConfig(PyConfig.Config):
 
 	def fileStats(self):
 		files = self.files()
-		
 		stats = {}
 		for f in files:
 			stats[f] = os.stat(f)
@@ -203,13 +202,13 @@ class AppToolConfig(PyConfig.Config):
 	#	kwargs["use_prefix"] = True
 	#	return self.__path(*args, **kwargs)
 
-	def path(self, options=0, dirs=[], subdirs=[], file_name=None, lang=None, relative_to=None):
+	def path(self, options=0, dirs=[], subdirs=[], file_name=None, lang=None, relative_to=None, dep_name=None, dep_dir=None):
 		## Check for validity
 		prefix   = self.getPrefix(options)
-		dir_name = self.getDirName(options, lang)
+		dir_name = self.getDirName(options, lang, dep_name, dep_dir)
 
 		d = self.makeDir(prefix, dirs, dir_name, subdirs, file_name, options, relative_to)
-		PyLog.debug("Generated dir", d, log_level=8, **{"options":options, "dirs":dirs, "subdirs":subdirs, "file_name":file_name, "lang":lang})
+		PyLog.debug("Generated dir", d, log_level=8, **{"options":options, "dirs":dirs, "subdirs":subdirs, "file_name":file_name, "lang":lang, "dep_name":dep_name, "dep_dir":dep_dir})
 		return d
 
 	def howManyBitsSet(self, start, count, bits):
@@ -241,7 +240,7 @@ class AppToolConfig(PyConfig.Config):
 
 		return prefix
 
-	def getDirName(self, options, lang):
+	def getDirName(self, options, lang, dep_name, dep_dir):
 		found = self.howManyBitsSet(3, 9, options)
 
 		if found == 0:
@@ -279,8 +278,8 @@ class AppToolConfig(PyConfig.Config):
 			
 		if app:
 			if version:
-				return os.path.join(dir_name, self.name() + "-" + PyRCS.getVersion(self._dir))
-			return os.path.join(dir_name, self.name())
+				return os.path.join(dir_name, self.name() if dep_name == None else dep_name + "-" + PyRCS.getVersion(self._dir if dep_dir == None else dep_dir))
+			return os.path.join(dir_name, self.name() if dep_name == None else dep_name)
 		return dir_name
 
 	def makeDir(self, prefix, dirs, dir_name, subdirs, file_name, options, relative_to):

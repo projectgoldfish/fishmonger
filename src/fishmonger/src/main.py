@@ -376,6 +376,7 @@ class FishMonger():
 
 		result           = True
 
+		clean_key        = None
 		dependency_block = False
 		while True:
 			## We continue to process as long as we haven't failed
@@ -452,6 +453,7 @@ class FishMonger():
 				tasks[t] = None
 
 		if not result:
+			PyLog.error("Command returned unsuccessful result. Halting.", task=clean_key, result=result)
 			sys.exit(1)
 
 	def build(self, tools, **kwargs):
