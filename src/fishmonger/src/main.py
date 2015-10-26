@@ -314,8 +314,10 @@ class FishMonger():
 				after_tools = set()
 				for t in apptool["BUILD_AFTER_TOOLS"]:
 					## Add an edge for each app that uses this tool
-					after_tools |= set([PyGraph.Edge((t, allconfig[t][a].name()), vertex_key, direction=PyGraph.EdgeDirection.LTR) for a in allconfig[t]])
-					key_dependencies[vertex_key] |= set([(t, allconfig[t][a].name()) for a in allconfig[t]])
+					## if that tool is also used
+					if t in allconfig:
+						after_tools |= set([PyGraph.Edge((t, allconfig[t][a].name()), vertex_key, direction=PyGraph.EdgeDirection.LTR) for a in allconfig[t]])
+						key_dependencies[vertex_key] |= set([(t, allconfig[t][a].name()) for a in allconfig[t]])
 
 				PyLog.debug("After tools", vertex_key=vertex_key, build_after=after_tools, log_level=8)
 				t_edges |= after_tools
