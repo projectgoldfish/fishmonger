@@ -68,7 +68,7 @@ class ToolChain(fishmonger.ToolChain):
 		build_dir   = child.path(DF.build|DF.langlib|DF.app,   lang="python")
 		install_dir = child.path(DF.install|DF.langlib|DF.app, lang="python")
 
-		PyLog.debug("INSTALL Copy " + build_dir + " -> " + install_dir, log_level=6)
+		PyLog.debug("INSTALL Copy " + build_dir + " -> " + install_dir, log_level=-6)
 
 		PySH.copy(build_dir, install_dir, pattern="*.py", force=True, root_only=False)
 

@@ -20,6 +20,8 @@ import pybase.log    as PyLog
 
 import pickle
 
+import filedict      as FD
+
 import traceback
 
 class ToolChainException(PyExcept.BaseException):
@@ -62,12 +64,14 @@ class ToolChain(object):
 		try:
 			## Check if we're up to date
 			file_stats = app.fileStats()
-			updated    = updatedFiles(file_stats)
+			updated    = FD.FileStats.updatedFiles(file_stats)
 
 			if len(updated) == 0:
-				PyLog.log("Up to date")
-				PyLog.decreaseIndent()
+				PyLog.log("Up to date", log_level=-1)
 				return True
+			else:
+				PyLog.log("OUT of date", count=len(updated), log_level=-1)
+				#PyLog.decreaseIndent()
 
 			cmds = []
 
@@ -80,8 +84,7 @@ class ToolChain(object):
 					cmds += t_cmds
 		
 			if not cmds:
-				PyLog.decreaseIndent()
-				return True
+				cmds = []
 			for cmd in cmds:
 				if hasattr(cmd, "__call__"):
 					cmd(app)
@@ -90,15 +93,15 @@ class ToolChain(object):
 						raise ToolChainException("Failure while performing action", action=action, app=app, cmd=cmd)
 				else:
 					raise ToolChainException("Invalid %s cmd. Cmds must be string or fun: %s : %s" % (action, app, cmd))
-
 		except PyExcept.BaseException as e:
-			PyLog.decreaseIndent()
 			raise e
-
 		except Exception as e:
 			raise ToolChainException(None, trace=sys.exc_info())
 
-		saveFileStats(file_stats)
+		finally:
+			PyLog.decreaseIndent()
+
+		FD.FileStats.saveFileStats(file_stats)
 
 		PyLog.decreaseIndent()
 		return True
@@ -219,37 +222,3 @@ addToolChains(fishmonger.toolchains.link(),     LinkToolChains,     "fishmonger.
 addToolChains(fishmonger.toolchains.document(), DocumentToolChains, "fishmonger.toolchains")
 addToolChains(fishmonger.toolchains.install(),  InstallToolChains,  "fishmonger.toolchains")
 addToolChains(fishmonger.toolchains.package(),  PackageToolChains,  "fishmonger.toolchains")
-
-FileStats = {}
-
-def loadFileStats():
-	if os.path.isfile(".fishmonger.pickle"):
-		f = open(".fishmonger.pickle", "r")
-		FileStats = pickle.load(f)
-		f.close()
-
-def saveFileStats(stats):
-	for stat in stats:
-		if stat not in FileStats:
-			FileStats[stat] = stats[stat]
-
-	f = open(".fishmonger.pickle", "w")
-	pickle.dump(FileStats, f)
-	f.close()
-
-def updatedFiles(files):
-	updated_files = []
-
-	#print "Updates"
-	for f in files:
-		if f not in FileStats:
-			updated_files.append(f)
-		elif files[f].st_mtime > FileStats[f].st_mtime:
-			updated_files.append(f)
-
-	return files
-
-loadFileStats()
-
-
-
