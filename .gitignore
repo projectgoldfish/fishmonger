@@ -4,3 +4,4 @@ py-libs/*
 install/*
 deps/*
 build/*
+.fishmonger.pickle
