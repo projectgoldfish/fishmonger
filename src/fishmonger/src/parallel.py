@@ -1,133 +1,167 @@
+"""
+Module that provides a simplified manner for parallel processing
+
+Grammar:
+	task()            - An class type that extends ParallelTask()
+	data()            - term() | (term(), [term()])
+	term()            - Any value
+	integer()         - Integer within the range given
+"""
+
 ## Python modules included
 import sys
 
 import multiprocessing
 
-## Fishmonger modules included
-import fishmonger.config     as FishConfig
-import fishmonger.exceptions as FishExceptions
+## PyBase modules included
+import pybase.log       as PyLog
+import pybase.exception as PyException
+
+class ParallelException(PyException.BaseException):
+	pass
+
+class ParallelTaskException(PyException.BaseException):
+	pass
 
 class ParallelTask(multiprocessing.Process):
 	def __init__(self, data, reduce_queue):
 		multiprocessing.Process.__init__(self)
-
 		self.data         = data
 		self.reduce_queue = reduce_queue
 
 	def run(self):
 		res   = None
-		error = True
+		error = None
 		try:
 			res   = self.action(self.app)
-			error = False
-		except FishExceptions.FishmongerException as e:
-			PyLog.increaseIndent()
-			PyLog.error(e)
-			PyLog.decreaseIndent()
+		except PyException.BaseException as e:
+			error = e
 		except Exception as e:
-			et, ei, tb = sys.exc_info()
-			PyLog.error("Exception during %s%s" % (self.action, self.key), exception=str(e))
-			PyLog.increaseIndent()
-			for line in traceback.format_tb(tb):
-				for t_line in line.strip().split("\n"):
-					PyLog.error(t_line)
-			PyLog.decreaseIndent()
-		self.clean_queue.put((error, res))
+			error = ParallelTaskException(str(e), trace=sys.exec_info())
+		self.clean_queue.put((self.data, error, res))
 
 	def action(self, object):
-		raise(FishExceptions.FishmongerParallelTaskException("ParallelTask action not defined"))
+		raise(ParallelTaskException("ParallelTask action not defined"))
 
-def process(task, objects, reducer=None, max_cores=1):
+def processObjects(task_class, objects, reducer=None, max_cores=None):
+	"""
+	processObjects(task()::Task, [data()]::Data, fun(term()::New, term()::Accumulator) -> data()::Reducer, integer(>=1)::Cores) -> data() :: Result
+	
+	Task    - The task class to run in parallel
+	
+	Data    - List of objects that contains data elements to process in parallel. If an element is of the
+	          form (term()::A, [term()]::B) it is understood that A is not to be run until all of B have completed.
+	          Processing is attempted semi inorder. The next element to process is chosen by taking the first element
+	          of data that has all dependencies met.
+	 
+	Reducer - Function that takes a processed value and an accumulator and returns a new accumulator. The first value to
+	          be processed will be given the accumulator None. If a reducer is not provide None will be returned.
+	
+	Cores   - The maximum instances of Task to run in parallel. When a value is not provided the n-1 cores will be used where
+	          n is the number of cores available to the system. If n is ever below 0 1 core will be used.
+
+	Result  - The final value of the accumulator or None if no accumulator is provided
+	"""
 	manager          = multiprocessing.Manager()
 	result_queue     = manager.Queue()
 
+	acc              = None
 	used_cores       = 0
-
+	error            = False
 	tasks            = {}
 
-	commands         = self.command_list
-	dependencies     = self.command_dependencies
-
-	command          = None
-
-	result           = True
-
-	clean_key        = None
-	dependency_block = False
+	## Loop until we explicitly break
 	while True:
-		## We continue to process as long as we haven't failed
-		## And as long as we have a command left to spawn
-		if result != True:
-			PyLog.debug("Result false", log_level=6)
+		if len(objects) == 0:
+			"""
+			If we have no objects we've dispatched everything. Exit the loop and wait. 
+			"""
 			break
-		elif len(commands) == 0 and command == None:
-			PyLog.debug("Comamnd Stats", commands=commands, command=command, log_level=6)
-			break
-					
-		## If we have no command extract one
-		if command == None:
-			dependency_block = False
 
-			## Get the first command that has no dependencies outstanding
-			for x in range(len(commands)):
-				t_key = commands[x][0]
-				if len(dependencies[t_key]) == 0:
-					command = commands.pop(x)
-					break
+		(obj, objects) = getObject(objects)
+		if obj != None:
+			"""
+			If we were able to get an object dispatch it.
+			"""
+			tasks[obj] =  task_class(obj, result_queue)
+			used_cores += 1
 
-			PyLog.debug("Fetched Command", command=command, log_level=6)
-			if command == None:
-				dependency_block = True
-			
-		## If we have a command AND we have available cores build/dispatch the task
-		if used_cores < max_cores and command != None:
-			PyLog.debug("Have cores", used_cores=used_cores, max_cores=max_cores, log_level=9)
-			
-			(key, action, app)  = command
-			PyLog.debug("Running Task", task=key, log_level=9)
-			t_task              = BuildTask(key, action, app, clean_queue)
-			tasks[key]          = t_task
-			
-			PyLog.debug("Starting task", log_level=9)
-			t_task.start()
+			if used_cores < max_cores:
+				"""
+				If we have more cores avilable resume the loop
+				"""
+				continue
+		
+		"""
+		If we do not immediately continue then we are either using all cores or we have no
+		tasks that cannot be started until a dependency completes.
 
-			used_cores         += 1
-			command             = None
+		Wait for a running task to complete, perform cleanup, then attempt to dispatch.
+		"""
+		(r_obj, error, res) = result_queue.get()
+		if error != None:
+			"""
+			If the task resulted in error halt running tasks and rasie the error.
+			"""
+			for t in tasks:
+				if tasks[t] != None:
+					tasks[t].terminate()
+					tasks[t].join()
+			raise(error)
+		if reducer != None:
+			acc = reducer(res, acc)
 
-			continue
+		tasks[r_obj].join()
+		tasks[r_obj]  = None
+		used_cores   -= 1
+
+	"""
+	At this point all objects have been dispatched. Retrieve final calculations, run reduce, return
+	"""
+	while used_cores > 0:
+		(r_obj, error, res) = result_queue.get()
+		if error != None:
+			"""
+			If the task resulted in error halt running tasks and raise the error.
+			"""
+			for t in tasks:
+				if tasks[t] != None:
+					tasks[t].terminate()
+					tasks[t].join()
+			raise(error)
+		if reducer != None:
+			acc = reducer(res, acc)
+
+		tasks[r_obj].join()
+		tasks[r_obj]  = None
+		used_cores   -= 1
+	return acc
+
+
+def getObject(objects):
+	"""
+	getObject([data()]::Data) -> (term()::Next, [data()]::Data2)
+
+	Data      - List of objects that contains data elements to process in parallel. If an element is of the
+	            form (term()::A, [term()]::B) it is understood that A is not to be run until all of B have completed.
+	            Processing is attempted semi inorder. The next element to process is chosen by taking the first element
+	            of data that has all dependencies met.
+
+	Completed - Dict of objects that have been processed.
+
+	Next      - The next item to be processed.
+
+	Data2     - The list generated by removing Next from Data
+	"""
+
+	for x in range(len(objects)):
+		obj = objects[x]
+		if isinstance(obj, tuple):
+			(data, dependencies) = obj
+			if len(dependencies) == 0:
+				objects.pop(x)
+				return (data, objects)
 		else:
-			PyLog.debug("Waiting on cores or command dependencies", used_cores=used_cores, max_cores=max_cores, command=command, log_level=6)
-
-		## If we ever get to the point where we could not get a command AND no tasks are running
-		##   There must be some error in the build dependencies
-		##   Halt the system in error as we'll never take another action
-		if used_cores == 0 and command == None and len(commands) != 0:
-			PyLog.error("No commands can be built and no tasks are pending. Halting.", commands=commands, dependencies=dependencies)
-			sys.exit(1)
-
-		## If we have no cores OR
-		## If we have remaining commands OR
-		## If we are dependency blocked
-		if used_cores == max_cores or len(commands) == 0 or dependency_block == True:		
-			PyLog.debug("Waiting for a task to finish", cores=used_cores==max_cores, commands=len(commands), dependency_block=dependency_block, log_level=6)
-			(clean_key, result) = clean_queue.get()
-
-			PyLog.debug("Cleaning", clean_key=clean_key, result=result, log_level=6)
-			tasks[clean_key].join()
-			tasks[clean_key]  = None
-			used_cores       -= 1
-
-			for d in dependencies:
-				dependencies[d] -= set([clean_key])
-
-	for t in tasks:
-		if tasks[t] is not None:
-			PyLog.debug("Joining", task=t, log_level=6)
-			if result != True:
-				tasks[t].terminate()
-			tasks[t].join()
-			tasks[t] = None
-
-	if not result:
-		PyLog.error("Command returned unsuccessful result. Halting.", task=clean_key, result=result)
-			sys.exit(1)
+			objects.pop(x)
+			return (data, objects)
+	return (None, objects)
