@@ -24,6 +24,14 @@ class ParallelTaskException(PyException.BaseException):
 	pass
 
 class ParallelTask(multiprocessing.Process):
+	"""
+	Wrapper class for multiprocessing.Process that defines the behavior of a task as
+	expected by the paralel mondule.
+
+	The user must not implement __init__ or run.
+	The user must implement action.
+	"""
+
 	def __init__(self, data, reduce_queue):
 		multiprocessing.Process.__init__(self)
 		self.data         = data
