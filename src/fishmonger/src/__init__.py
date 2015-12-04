@@ -7,8 +7,8 @@ import pybase.log       as PyLog
 import pybase.find      as PyFind
 
 ## Fishmonger modules included
+import fishmonger.exceptions as FishExc
 import fishmonger.toolchains as FishTC
-
 
 def addToolChains(array, target, prefix=""):
 	if isinstance(array, basestring):
@@ -23,33 +23,6 @@ def addToolChains(array, target, prefix=""):
 	PyUtil.loadModules(modules, target)
 	PyUtil.loadModules(modules, AllToolChains)
 
-
-def scanSrcDirs(parent=None, root=".", app_dirs=None):
-	"""
-	scanSrcDirs(string()::Parent, string()::Root, [()]|None::AppDirs) ->
-
-	Scans the directory structure for src directories and thier parents.
-	"""
-	if app_dirs == None:
-		app_dirs = []
-
-	app_dirs.append((parent, root))
-	src_dir   = os.path.join(root, "src")
-	
-	nparent = root
-	dirs    = []
-	if os.path.isdir(src_dir):
-		dirs = PyFind.getDirDirs(src_dir)
-	else:
-		nparent = parent
-		dirs    = PyFind.getDirDirs(root)
-
-	for d in dirs:
-		if os.path.basename(d)[0] != ".":
-			scanSrcDirs(nparent, d, app_dirs)
-
-	return app_dirs
-
 def getAppDirs(root = "."):
 	"""
 	getAppDirs(string()::Root) -> [string()]::Return
@@ -60,6 +33,32 @@ def getAppDirs(root = "."):
 
 	Return - A list of directories that are root directories for applications
 	"""
+
+	def scanSrcDirs(parent=None, root=".", app_dirs=None):
+		"""
+		scanSrcDirs(string()::Parent, string()::Root, [()]|None::AppDirs) ->
+
+		Scans the directory structure for src directories and thier parents.
+		"""
+		if app_dirs == None:
+			app_dirs = []
+
+		app_dirs.append((parent, root))
+		src_dir   = os.path.join(root, "src")
+		
+		nparent = root
+		dirs    = []
+		if os.path.isdir(src_dir):
+			dirs = PyFind.getDirDirs(src_dir)
+		else:
+			nparent = parent
+			dirs    = PyFind.getDirDirs(root)
+
+		for d in dirs:
+			if os.path.basename(d)[0] != ".":
+				scanSrcDirs(nparent, d, app_dirs)
+
+		return app_dirs
 
 	def makeAppDirTree(acc, dirs):
 		(parent, child) = dirs
@@ -81,9 +80,13 @@ def getAppDirs(root = "."):
 
 def configure():
 	"""
-	configure() -> []
+	configure() -> [{}]
 
 	Generates base app configuration for all used tool chains.
 	"""
 
+	pass
+
+def configureStage():
+	pass
 	

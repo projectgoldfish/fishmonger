@@ -1,40 +1,51 @@
-import fishmonger.toolchains as Self
+## Python modules included
+import importlib
 
-Enabled  = {}
-Provided = {
+## PyBase modules included
+import pybase.log as PyLog
+
+## Fishmonger modules included
+import fishmonger.exceptions as FishExc
+
+FullNames  = {}
+ShortNames = {}
+Enabled    = {}
+
+All        = {}
+Nix        = {
 	"build"    : [
-		"python",
-#		"gplusplus",
-		"erlc",
-#		"jscc",
-		"erl_app",
-		"javac",
-#		"scalac"
+		"fishmonger.toolchains.python",
+#		"fishmonger.toolchains.gplusplus",
+		"fishmonger.toolchains.erlc",
+#		"fishmonger.toolchains.jscc",
+		"fishmonger.toolchains.erl_app",
+		"fishmonger.toolchains.javac",
+#		"fishmonger.toolchains.scalac"
 	],
 	"clean"    : [
-		"rpm"
+		"fishmonger.toolchains.rpm"
 	],
 	"document" : [
-		"edoc",
-		"jsdoc",
-#		"javadoc"
+		"fishmonger.toolchains.edoc",
+		"fishmonger.toolchains.jsdoc",
+#		"fishmonger.toolchains.javadoc"
 	],
 	"external" : [
-		"rebar"
+		"fishmonger.toolchains.rebar"
 	],
 	"generate" : [
 	],
 	"install"  : [
-		"python",
-		"erlc",
-		"erl_app",
-		"erl_misc",
-		"erl_config",
-		"javac",
-#		"scalac",
-#		"scala_app"
-#		"jar",
-#		"java_app"
+		"fishmonger.toolchains.python",
+		"fishmonger.toolchains.erlc",
+		"fishmonger.toolchains.erl_app",
+		"fishmonger.toolchains.erl_misc",
+		"fishmonger.toolchains.erl_config",
+		"fishmonger.toolchains.javac",
+#		"fishmonger.toolchains.scalac",
+#		"fishmonger.toolchains.scala_app"
+#		"fishmonger.toolchains.jar",
+#		"fishmonger.toolchains.java_app"
 	],
 	"internal" : [
 	],
@@ -42,27 +53,53 @@ Provided = {
 	"link"     : [
 	],
 	"package"  : [
-#		"deb",
-		"rpm"
+#		"fishmonger.toolchains.deb",
+		"fishmonger.toolchains.rpm"
 	]
+}
+Osx        = {}
+Win        = {}
+
+Provided   = {
+	"all" : All,
+	"nix" : Nix,
+	"osx" : Osx,
+	"win" : Win
 }
 
 def init():
-	Self.Provided
 	"""
 	init() -> no_return()
 
 	Initializes and enables the provided toolchains.
 	"""
-	return reduce(lambda acc, key: acc | set(Provided[key]), Provided, set())
+
+	os     = getOs()
+	foros  = reduce(lambda acc, key: acc | set(Provided[os][key]),    Provided[os], set())
+	forall = reduce(lambda acc, key: acc | set(Provided["all"][key]), Provided["all"],   set())
+	map(enable, forall | foros)
+
+def replace(name):
+	"""
+	replace(string()::Name)
+
+	Loads the module Name. Name bust be a module within the known PYTHONPATH.
+	If the module short name has previously been used this module wll replace it.
+	"""
+	sname          = shortName(name)
+	Enabled[sname] = importlib.import_module(name)
 
 def enable(name):
 	"""
 	enable(string()::Name)
 
-	Loads the module Name. Name bust be a module within the known PYTHONPATH.
+	Loads the module Name. Name bust be a module within the known PYTHONPATH. An 
+	error is thrown if the module short name has been used.
 	"""
-	pass
+	sname          = shortName(name)
+	if sname in FullNames:
+		raise FishExc.FishmongerToolchainException("Toolchain with short name has already been loaded", short_name=sname, full_name=name, existing=FullNames[sname])
+	Enabled[sname] = importlib.import_module(name)
 
 def disable(name):
 	"""
@@ -70,7 +107,8 @@ def disable(name):
 
 	Disables the module that has been loaded at Name.
 	"""
-	pass
+	sname = shortName(name)
+	del Enabled[sname]
 
 def get(name):
 	"""
@@ -78,8 +116,41 @@ def get(name):
 
 	Returns the module loaded at Name. If no module is loaded None is returned.
 	"""
-	pass
+	return Enabled.get(shortName(name), None)
 
-a = list(init())
-a.sort()
-print a
+def getOs():
+	"""
+	getOs() -> "nix"|"osx"|"win"
+
+	Returns a 3 character string signifying the type of operating system is in use.
+	This is used when determining which version of toolchains to use.
+	"""
+	return "nix"
+
+def shortName(name):
+	"""
+	shortName(string()::Name) -> string()::Return
+
+	Returns the last portions of a fully qualified module name. This is the
+	name that is reported in the build steps.
+
+	Example: fishmonger.toolchains.erlc -> erlc
+	"""
+	if name not in ShortNames:
+		ShortNames[name] = name.split(".")[-1]
+	return ShortNames[name]
+
+def fullName(name):
+	"""
+	fullName(string()::Name) -> string()::Return
+
+	Returns the full name associated with the given short name.
+	An error is thrown if no full name exists.
+
+	Example: erlc -> fishmonger.toolchains.erlc
+	"""
+	if name not in FullNames:
+		raise FishExc.FishmongerToolchainException("No full name has been given for short name" short_name=name)
+	return FullNames[name]
+
+init()
