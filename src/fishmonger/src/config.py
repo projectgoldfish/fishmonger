@@ -95,7 +95,7 @@ class Config():
 		self.values = {}
 		self.types  = {self.configKey(k) : types[k] for k in types}
 		if isinstance(source, str) and os.path.isfile(source):
-			parser = FileParser()
+			parser = Config.FileParser()
 			values = parser.parse(source)
 		elif isinstance(source, dict):
 			values = source
@@ -139,11 +139,22 @@ class Config():
 		self.__setitem__(key, value)
 
 class PriorityConfig(Config):
-	def __init__(self):
-		Config.__init__(self)
+	def __init__(self, types={}):
+		Config.__init__(self, {}, types)
 		self.configs = []
+
+	def __getitem__(self, key):
+		key = self.configKey(key)
+		if key in self.values:
+			return self.values[key]
+		for (x, config) in self.configs:
+			if key in config:
+				return config[key]
+		raise KeyError
 
 	def addConfig(self, config, priority=None):
 		priority = priority if priority != None else len(self.configs)
+		config   = Config(config)
 		self.configs.append((priority, config))
 		self.configs.sort()
+
