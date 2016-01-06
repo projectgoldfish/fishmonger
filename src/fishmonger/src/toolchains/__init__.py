@@ -75,9 +75,9 @@ def init():
 	"""
 
 	os     = getOs()
-	foros  = reduce(lambda acc, key: acc | set(Provided[os][key]),    Provided[os], set())
-	forall = reduce(lambda acc, key: acc | set(Provided["all"][key]), Provided["all"],   set())
-	map(enable, forall | foros)
+	foros  = reduce(lambda acc, key: acc | set(Provided[os][key]),    Provided[os],    set())
+	forall = reduce(lambda acc, key: acc | set(Provided["all"][key]), Provided["all"], set())
+	map(enable, foror | forall)
 
 def replace(name):
 	"""
@@ -150,7 +150,7 @@ def fullName(name):
 	Example: erlc -> fishmonger.toolchains.erlc
 	"""
 	if name not in FullNames:
-		raise FishExc.FishmongerToolchainException("No full name has been given for short name" short_name=name)
+		raise FishExc.FishmongerToolchainException("No full name has been given for short name", short_name=name)
 	return FullNames[name]
 
 init()

@@ -42,8 +42,6 @@ def main():
 		2b) Determine order of execution for states
 		2c) Run commands
 	"""
-
-
 	config   = FishConfig.PriorityConfig()
 	config.addConfig(FishConfig.Config.Sources.CLI, 1)
 	config.addConfig(FishConfig.Config.Sources.ENV, 2)
@@ -56,7 +54,7 @@ def main():
 		commands.append(config[x])
 		x += 1
 
-
+	
 
 
 

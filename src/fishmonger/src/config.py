@@ -7,7 +7,7 @@ import pybase.log as PyLog
 
 ## Fishmonger modules included
 #import fishmonger.exceptions as FishExc
-import exceptions as FishExc
+import fishmonger.exceptions as FishExc
 
 """
 Config
