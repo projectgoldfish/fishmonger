@@ -14,34 +14,34 @@ Enabled    = {}
 All        = {}
 Nix        = {
 	"build"    : [
-		"fishmonger.toolchains.python",
+#		"fishmonger.toolchains.python",
 #		"fishmonger.toolchains.gplusplus",
-		"fishmonger.toolchains.erlc",
+#		"fishmonger.toolchains.erlc",
 #		"fishmonger.toolchains.jscc",
-		"fishmonger.toolchains.erl_app",
-		"fishmonger.toolchains.javac",
+#		"fishmonger.toolchains.erl_app",
+#		"fishmonger.toolchains.javac",
 #		"fishmonger.toolchains.scalac"
 	],
 	"clean"    : [
-		"fishmonger.toolchains.rpm"
+#		"fishmonger.toolchains.rpm"
 	],
 	"document" : [
-		"fishmonger.toolchains.edoc",
-		"fishmonger.toolchains.jsdoc",
+#		"fishmonger.toolchains.edoc",
+#		"fishmonger.toolchains.jsdoc",
 #		"fishmonger.toolchains.javadoc"
 	],
 	"external" : [
-		"fishmonger.toolchains.rebar"
+#		"fishmonger.toolchains.rebar"
 	],
 	"generate" : [
 	],
 	"install"  : [
-		"fishmonger.toolchains.python",
-		"fishmonger.toolchains.erlc",
-		"fishmonger.toolchains.erl_app",
-		"fishmonger.toolchains.erl_misc",
-		"fishmonger.toolchains.erl_config",
-		"fishmonger.toolchains.javac",
+#		"fishmonger.toolchains.python",
+#		"fishmonger.toolchains.erlc",
+#		"fishmonger.toolchains.erl_app",
+#		"fishmonger.toolchains.erl_misc",
+#		"fishmonger.toolchains.erl_config",
+#		"fishmonger.toolchains.javac",
 #		"fishmonger.toolchains.scalac",
 #		"fishmonger.toolchains.scala_app"
 #		"fishmonger.toolchains.jar",
@@ -54,7 +54,7 @@ Nix        = {
 	],
 	"package"  : [
 #		"fishmonger.toolchains.deb",
-		"fishmonger.toolchains.rpm"
+#		"fishmonger.toolchains.rpm"
 	]
 }
 Osx        = {}
@@ -77,7 +77,7 @@ def init():
 	os     = getOs()
 	foros  = reduce(lambda acc, key: acc | set(Provided[os][key]),    Provided[os],    set())
 	forall = reduce(lambda acc, key: acc | set(Provided["all"][key]), Provided["all"], set())
-	map(enable, foror | forall)
+	map(enable, foros | forall)
 
 def replace(name):
 	"""

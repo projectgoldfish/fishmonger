@@ -139,9 +139,14 @@ class Config():
 		self.__setitem__(key, value)
 
 class PriorityConfig(Config):
-	def __init__(self, types={}):
+	def __init__(self, *sources, types={}):
 		Config.__init__(self, {}, types)
 		self.configs = []
+		for source in sources:
+			if isinstance(source, tuple):
+				self.addConfig(*source)
+			else:
+				self.addConfig(source)
 
 	def __getitem__(self, key):
 		key = self.configKey(key)
