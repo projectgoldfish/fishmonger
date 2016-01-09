@@ -10,7 +10,7 @@ Grammar:
 
 ## Python modules included
 import sys
-
+import signal
 import multiprocessing
 
 ## PyBase modules included
@@ -34,6 +34,9 @@ class ParallelTask(multiprocessing.Process):
 
 	def __init__(self, data, reduce_queue):
 		multiprocessing.Process.__init__(self)
+
+		signal.signal(signal.SIGINT, signal.SIG_IGN)
+
 		self.data         = data
 		self.reduce_queue = reduce_queue
 
@@ -119,7 +122,8 @@ def processObjects(task_class, objects, reducer=None, max_cores=None):
 		if reducer != None:
 			acc = reducer(res, acc)
 
-		tasks[r_obj].join()
+		if tasks[r_obj].is_alive():
+			tasks[r_obj].join()
 		tasks[r_obj]  = None
 		used_cores   -= 1
 
@@ -133,7 +137,7 @@ def processObjects(task_class, objects, reducer=None, max_cores=None):
 			If the task resulted in error halt running tasks and raise the error.
 			"""
 			for t in tasks:
-				if tasks[t] != None:
+				if tasks[t] != None and tasks[t].is_alive():
 					tasks[t].terminate()
 					tasks[t].join()
 			raise(error)

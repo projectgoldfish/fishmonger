@@ -3,7 +3,12 @@ import os
 import sys
 import signal
 
+import functools
+import itertools
+
+
 ## Fishmonger modules included
+import fishmonger
 import fishmonger.config     as FishConfig
 import fishmonger.exceptions as FishExc
 
@@ -48,14 +53,21 @@ def main():
 
 	PyLog.setLogLevel()
 
-	commands = []
+	commands = {}
 	x        = 0
 	while x in config:
-		commands.append(config[x])
+		commands[config[x].lower()] = True
 		x += 1
-
+	
+	"""
+	"""
+	
 	
 
+	[runStage(stage, modules, config) for stage in fishmonger.Stages if stage in fishmonger.StageSynonyms[stage]]
+
+def runStage(stage, modules, config):
+	pass
 
 
 
@@ -68,3 +80,4 @@ def main():
 
 
 
+main()

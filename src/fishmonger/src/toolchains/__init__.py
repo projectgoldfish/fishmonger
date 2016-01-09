@@ -1,5 +1,4 @@
 ## Python modules included
-import importlib
 
 ## PyBase modules included
 import pybase.log as PyLog
@@ -9,63 +8,24 @@ import fishmonger.exceptions as FishExc
 
 FullNames  = {}
 ShortNames = {}
-Enabled    = {}
+Enabled    = []
 
-All        = {}
-Nix        = {
-	"build"    : [
-#		"fishmonger.toolchains.python",
-#		"fishmonger.toolchains.gplusplus",
-#		"fishmonger.toolchains.erlc",
-#		"fishmonger.toolchains.jscc",
-#		"fishmonger.toolchains.erl_app",
-#		"fishmonger.toolchains.javac",
-#		"fishmonger.toolchains.scalac"
-	],
-	"clean"    : [
-#		"fishmonger.toolchains.rpm"
-	],
-	"document" : [
-#		"fishmonger.toolchains.edoc",
-#		"fishmonger.toolchains.jsdoc",
-#		"fishmonger.toolchains.javadoc"
-	],
-	"external" : [
-#		"fishmonger.toolchains.rebar"
-	],
-	"generate" : [
-	],
-	"install"  : [
-#		"fishmonger.toolchains.python",
-#		"fishmonger.toolchains.erlc",
-#		"fishmonger.toolchains.erl_app",
-#		"fishmonger.toolchains.erl_misc",
-#		"fishmonger.toolchains.erl_config",
-#		"fishmonger.toolchains.javac",
-#		"fishmonger.toolchains.scalac",
-#		"fishmonger.toolchains.scala_app"
-#		"fishmonger.toolchains.jar",
-#		"fishmonger.toolchains.java_app"
-	],
-	"internal" : [
-	],
-	
-	"link"     : [
-	],
-	"package"  : [
-#		"fishmonger.toolchains.deb",
-#		"fishmonger.toolchains.rpm"
-	]
-}
-Osx        = {}
-Win        = {}
+ExternalTools = {} ## module() => 1
+InternalTools = {} ## module() => 1
 
-Provided   = {
-	"all" : All,
-	"nix" : Nix,
-	"osx" : Osx,
-	"win" : Win
-}
+class ToolType:
+	INTERNAL, EXTERNAL = range(0, 2)
+
+Provided = [
+	## Erlang Tools
+	("edoc",    ToolType.INTERNAL),
+	("erlc",    ToolType.INTERNAL),
+	("erl_sys", ToolType.INTERNAL),
+	("rebar",   ToolType.EXTERNAL),
+
+	## Python Tools
+	("python",  ToolType.INTERNAL)
+]
 
 def init():
 	"""
@@ -73,59 +33,20 @@ def init():
 
 	Initializes and enables the provided toolchains.
 	"""
+	map(lambda x: enable(*x), Provided)
 
-	os     = getOs()
-	foros  = reduce(lambda acc, key: acc | set(Provided[os][key]),    Provided[os],    set())
-	forall = reduce(lambda acc, key: acc | set(Provided["all"][key]), Provided["all"], set())
-	map(enable, foros | forall)
-
-def replace(name):
-	"""
-	replace(string()::Name)
-
-	Loads the module Name. Name bust be a module within the known PYTHONPATH.
-	If the module short name has previously been used this module wll replace it.
-	"""
-	sname          = shortName(name)
-	Enabled[sname] = importlib.import_module(name)
-
-def enable(name):
+def enable(name, tool_type=ToolType.INTERNAL):
 	"""
 	enable(string()::Name)
 
 	Loads the module Name. Name bust be a module within the known PYTHONPATH. An 
 	error is thrown if the module short name has been used.
 	"""
-	sname          = shortName(name)
-	if sname in FullNames:
+	if name in FullNames:
 		raise FishExc.FishmongerToolchainException("Toolchain with short name has already been loaded", short_name=sname, full_name=name, existing=FullNames[sname])
+	
+	sname          = shortName(name)
 	Enabled[sname] = importlib.import_module(name)
-
-def disable(name):
-	"""
-	disable(string()::Name)
-
-	Disables the module that has been loaded at Name.
-	"""
-	sname = shortName(name)
-	del Enabled[sname]
-
-def get(name):
-	"""
-	get(string()::Name) -> module()|None
-
-	Returns the module loaded at Name. If no module is loaded None is returned.
-	"""
-	return Enabled.get(shortName(name), None)
-
-def getOs():
-	"""
-	getOs() -> "nix"|"osx"|"win"
-
-	Returns a 3 character string signifying the type of operating system is in use.
-	This is used when determining which version of toolchains to use.
-	"""
-	return "nix"
 
 def shortName(name):
 	"""
@@ -153,4 +74,114 @@ def fullName(name):
 		raise FishExc.FishmongerToolchainException("No full name has been given for short name", short_name=name)
 	return FullNames[name]
 
-init()
+class ToolChain():
+	def srcExts():
+		"""
+		Source Extensions
+		srcExts() -> [string()]
+
+		Returns a list of the file extensions that this tool works with.
+
+		This function MUST be implemented.
+		"""
+		return []
+
+	def uses(config):
+		"""
+		Uses
+		uses(string()) -> boolean
+
+		Determines if the tool chain should act on the proposed configuration.
+		"""
+		return 
+
+	def configure(config):
+		"""
+		Configure
+		configure(config()) -> config()
+
+		Returns a configuration object updated with toolchain specific configuration.
+		"""
+		return config
+
+	def dependencies(config):
+		"""
+		Dependencies
+		dependencies(config()) -> [dependency()]
+
+		Returns a list of dependency specs for this config(). This should return an empty list
+		unless the tool supports dependencies, such as with rebar.
+		"""
+		return []
+
+	def clean(self, app):
+		"""
+		Clean
+		clean(config()) -> [command()] | None
+
+		Cleans this build stage.
+		"""
+		return None
+
+	def generate(self, app):
+		"""
+		Generate
+		generate(config()) -> [command()] | None
+
+		Returns the list of commands() that must be run to generate code for the application.
+		"""
+		return None
+
+	def build(self, app):
+		"""
+		Build
+		build(config()) -> [command()] | None
+
+		Returns the list of commands() that must be run to build the application.
+		"""
+		return None
+
+	def link(self, app):
+		"""
+		Link
+		link(config()) -> [command()] | None
+
+		Returns the list of commands() that must be run to link the application.
+		"""
+		return None
+
+	def install(self, app):
+		"""
+		Install
+		install(config()) -> [command()] | None
+
+		Returns the list of commands() that must be run to install the application.
+		"""
+		return None
+
+	def document(self, app):
+		"""
+		Document
+		document(config()) -> [command()] | None
+
+		Returns the list of commands() that must be run to document the application.
+		"""
+		return None
+
+	def package(self, app):
+		"""
+		Package
+		package(config()) -> [command()] | None
+
+		Returns the list of commands() that must be run to package the application.
+		"""
+		return None
+
+	def publish(self, app):
+		"""
+		Publish
+		ppublish(config()) -> [command()] | None
+
+		Returns the list of commands() that must be run to publish the application.
+		"""
+		return None
