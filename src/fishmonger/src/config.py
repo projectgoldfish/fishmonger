@@ -47,7 +47,7 @@ class Config():
 		def parse(self):
 			x = 1
 			y = 0
-			args = {}
+			args = []
 			while x < len(sys.argv):
 				(x, y, arg) = self.parseCLIArg(x, y)
 				args.append(arg)
@@ -121,6 +121,9 @@ class Config():
 		value = self.configValue(key, value)
 		self.values[key] = value
 
+	def __contains__(self, key):
+		return key in self.values
+
 	def configKey(self, key):
 		return key.lower() if isinstance(key, str) else key
 
@@ -139,7 +142,8 @@ class Config():
 		self.__setitem__(key, value)
 
 class PriorityConfig(Config):
-	def __init__(self, *sources, types={}):
+	def __init__(self, *sources, **kwargs):
+		types = {} if not "types" in kwargs else kwargs["types"]
 		Config.__init__(self, {}, types)
 		self.configs = []
 		for source in sources:
@@ -156,6 +160,14 @@ class PriorityConfig(Config):
 			if key in config:
 				return config[key]
 		raise KeyError
+
+	def __contains__(self, key):
+		if key in self.values:
+			return True
+		for (x, config) in self.configs:
+			if key in config:
+				return True
+		return False
 
 	def addConfig(self, config, priority=None):
 		priority = priority if priority != None else len(self.configs)

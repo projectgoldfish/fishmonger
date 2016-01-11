@@ -1,14 +1,14 @@
 ## Python modules included
 
 ## PyBase modules included
-import pybase.log as PyLog
+import pybase.log  as PyLog
+import pybase.find as PyFind
 
 ## Fishmonger modules included
 import fishmonger.exceptions as FishExc
 
-FullNames  = {}
 ShortNames = {}
-Enabled    = []
+Tools      = {}
 
 ExternalTools = {} ## module() => 1
 InternalTools = {} ## module() => 1
@@ -18,35 +18,35 @@ class ToolType:
 
 Provided = [
 	## Erlang Tools
-	("edoc",    ToolType.INTERNAL),
-	("erlc",    ToolType.INTERNAL),
-	("erl_sys", ToolType.INTERNAL),
-	("rebar",   ToolType.EXTERNAL),
+	("fishmonger.toolchains.edoc",    ToolType.INTERNAL),
+	("fishmonger.toolchains.erlc",    ToolType.INTERNAL),
+	("fishmonger.toolchains.erl_sys", ToolType.INTERNAL),
+	("fishmonger.toolchains.rebar",   ToolType.EXTERNAL),
 
 	## Python Tools
-	("python",  ToolType.INTERNAL)
+	("fishmonger.toolchains.python",  ToolType.INTERNAL)
 ]
 
-def init():
-	"""
-	init() -> no_return()
+def enable(name, tool_type=ToolType.INTERNAL, error_on_error=False):
+	try:
+		Tools[name] = getattr(__import__(name), "ToolChain")()
+		shortName(name)
+		if   tool_type == ToolType.INTERNAL:
+			InternalTools[name] = 1
+		elif tool_type == ToolType.EXTERNAL:
+			ExternalTools[name] = 1
+		else:
+			raise FishExc.FishmongerToolchainException("Invalid tool type given", tool_type=tool_type)
+	except AttributeError as e:
+		PyLog.error("Error loading module", module=name)
+		if error_on_error:
+			raise e
+	except ImportError as e:
+		PyLog.error("Error importing module", module=name)
+		if error_on_error:
+			raise e
+	PyLog.warning("Continuing without module", module=name)
 
-	Initializes and enables the provided toolchains.
-	"""
-	map(lambda x: enable(*x), Provided)
-
-def enable(name, tool_type=ToolType.INTERNAL):
-	"""
-	enable(string()::Name)
-
-	Loads the module Name. Name bust be a module within the known PYTHONPATH. An 
-	error is thrown if the module short name has been used.
-	"""
-	if name in FullNames:
-		raise FishExc.FishmongerToolchainException("Toolchain with short name has already been loaded", short_name=sname, full_name=name, existing=FullNames[sname])
-	
-	sname          = shortName(name)
-	Enabled[sname] = importlib.import_module(name)
 
 def shortName(name):
 	"""
@@ -61,20 +61,17 @@ def shortName(name):
 		ShortNames[name] = name.split(".")[-1]
 	return ShortNames[name]
 
-def fullName(name):
+def _init():
 	"""
-	fullName(string()::Name) -> string()::Return
+	init() -> no_return()
 
-	Returns the full name associated with the given short name.
-	An error is thrown if no full name exists.
-
-	Example: erlc -> fishmonger.toolchains.erlc
+	Initializes and enables the provided toolchains.
 	"""
-	if name not in FullNames:
-		raise FishExc.FishmongerToolchainException("No full name has been given for short name", short_name=name)
-	return FullNames[name]
+	map(lambda x: enable(*x), Provided)
 
 class ToolChain():
+	NOT_IMPLEMENTED = None
+
 	def srcExts():
 		"""
 		Source Extensions
@@ -93,7 +90,7 @@ class ToolChain():
 
 		Determines if the tool chain should act on the proposed configuration.
 		"""
-		return 
+		return len(PyFind.findAllByExtensions(self.srcExts(), config.root)) == 0
 
 	def configure(config):
 		"""
@@ -117,71 +114,73 @@ class ToolChain():
 	def clean(self, app):
 		"""
 		Clean
-		clean(config()) -> [command()] | None
+		clean(config()) -> [command()] | ToolChain.NOT_IMPLEMENTED
 
 		Cleans this build stage.
 		"""
-		return None
+		return ToolChain.NOT_IMPLEMENTED
 
 	def generate(self, app):
 		"""
 		Generate
-		generate(config()) -> [command()] | None
+		generate(config()) -> [command()] | ToolChain.NOT_IMPLEMENTED
 
 		Returns the list of commands() that must be run to generate code for the application.
 		"""
-		return None
+		return ToolChain.NOT_IMPLEMENTED
 
 	def build(self, app):
 		"""
 		Build
-		build(config()) -> [command()] | None
+		build(config()) -> [command()] | ToolChain.NOT_IMPLEMENTED
 
 		Returns the list of commands() that must be run to build the application.
 		"""
-		return None
+		return ToolChain.NOT_IMPLEMENTED
 
 	def link(self, app):
 		"""
 		Link
-		link(config()) -> [command()] | None
+		link(config()) -> [command()] | ToolChain.NOT_IMPLEMENTED
 
 		Returns the list of commands() that must be run to link the application.
 		"""
-		return None
+		return ToolChain.NOT_IMPLEMENTED
 
 	def install(self, app):
 		"""
 		Install
-		install(config()) -> [command()] | None
+		install(config()) -> [command()] | ToolChain.NOT_IMPLEMENTED
 
 		Returns the list of commands() that must be run to install the application.
 		"""
-		return None
+		return ToolChain.NOT_IMPLEMENTED
 
 	def document(self, app):
 		"""
 		Document
-		document(config()) -> [command()] | None
+		document(config()) -> [command()] | ToolChain.NOT_IMPLEMENTED
 
 		Returns the list of commands() that must be run to document the application.
 		"""
-		return None
+		return ToolChain.NOT_IMPLEMENTED
 
 	def package(self, app):
 		"""
 		Package
-		package(config()) -> [command()] | None
+		package(config()) -> [command()] | ToolChain.NOT_IMPLEMENTED
 
 		Returns the list of commands() that must be run to package the application.
 		"""
-		return None
+		return ToolChain.NOT_IMPLEMENTED
 
 	def publish(self, app):
 		"""
 		Publish
-		ppublish(config()) -> [command()] | None
+		ppublish(config()) -> [command()] | ToolChain.NOT_IMPLEMENTED
 
 		Returns the list of commands() that must be run to publish the application.
 		"""
-		return None
+		return ToolChain.NOT_IMPLEMENTED
+
+_init()

@@ -47,27 +47,28 @@ def main():
 		2b) Determine order of execution for states
 		2c) Run commands
 	"""
-	config   = FishConfig.PriorityConfig()
-	config.addConfig(FishConfig.Config.Sources.CLI, 1)
-	config.addConfig(FishConfig.Config.Sources.ENV, 2)
+	config_lib = {
+		"cli" : FishConfig.Config(FishConfig.Config.Sources.CLI, {"log_level" : int})
+		"env" : FishConfig.COnfig(FishConfig.Config.Sources.ENV)
+	}
 
-	PyLog.setLogLevel()
+	config     = FishConfig.PriorityConfig([(config_lib["cli"], 1), (config_lib["env"], 2)])
 
-	commands = {}
+	PyLog.setLogLevel(config["log_level"])
+
 	x        = 0
+	commands = set()
 	while x in config:
-		commands[config[x].lower()] = True
+		commands |= set([config[x].lower()])
 		x += 1
 	
-	"""
-	"""
-	
-	
+	[runStage(stage, config) for stage in fishmonger.Stages if fishmonger.StageSynonyms[stage] & commands != set()]
 
-	[runStage(stage, modules, config) for stage in fishmonger.Stages if stage in fishmonger.StageSynonyms[stage]]
-
-def runStage(stage, modules, config):
-	pass
+def runStage(stage, config):
+	PyLog.log(stage.title() + "...")
+	PyLog.increaseIndent()
+	configureStage(stage, config)
+	PyLog.decreaseIndent()
 
 
 

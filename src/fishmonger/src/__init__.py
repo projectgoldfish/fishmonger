@@ -21,29 +21,16 @@ Stages = [
 	"publish"
 ]
 
-StateSynonyms = {
-	"clean"    : ["clean"],
-	"generate" : ["generate"],
-	"build"    : ["build", "compile"],
-	"link"     : ["link"],
-	"install"  : ["install"],
-	"document" : ["document", "doc"],
-	"package"  : ["package"],
-	"publish"  : ["publish"]
+StageSynonyms = {
+	"clean"    : set(["clean"]),
+	"generate" : set(["generate"]),
+	"build"    : set(["build", "compile"]),
+	"link"     : set(["link"]),
+	"install"  : set(["install"]),
+	"document" : set(["document", "doc"]),
+	"package"  : set(["package"]),
+	"publish"  : set(["publish"])
 }
-
-def addToolChains(array, target, prefix=""):
-	if isinstance(array, basestring):
-		array = [array]
-
-	if prefix != "":
-		prefix += "."
-
-	modules = []
-	for c in array:
-		modules.append(prefix + c)
-	PyUtil.loadModules(modules, target)
-	PyUtil.loadModules(modules, AllToolChains)
 
 def getAppDirs(root = "."):
 	"""
@@ -112,9 +99,3 @@ def configure():
 def configureStage():
 	pass
 	
-def invoke(module, stage, *args, **kwargs):
-	if hasattr(module, stage):
-		func = getattr(module, stage)
-		res  = func(*args, **kwargs)
-		return (True, res)
-	return (False, None)
