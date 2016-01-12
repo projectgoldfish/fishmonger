@@ -48,13 +48,13 @@ def main():
 		2c) Run commands
 	"""
 	config_lib = {
-		"cli" : FishConfig.Config(FishConfig.Config.Sources.CLI, {"log_level" : int})
-		"env" : FishConfig.COnfig(FishConfig.Config.Sources.ENV)
+		"cli" : FishConfig.Config(FishConfig.Config.Sources.CLI, {"log_level" : int}),
+		"env" : FishConfig.Config(FishConfig.Config.Sources.ENV)
 	}
 
-	config     = FishConfig.PriorityConfig([(config_lib["cli"], 1), (config_lib["env"], 2)])
+	config     = FishConfig.PriorityConfig(*[(config_lib["cli"], 1), (config_lib["env"], 2)])
 
-	PyLog.setLogLevel(config["log_level"])
+	PyLog.setLogLevel(config.get("log_level", 0))
 
 	x        = 0
 	commands = set()
