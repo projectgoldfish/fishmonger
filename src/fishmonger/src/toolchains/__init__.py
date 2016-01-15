@@ -30,7 +30,7 @@ Provided = [
 def enable(name, tool_type=ToolType.INTERNAL, error_on_error=False):
 	try:
 		Tools[name] = getattr(__import__(name), "ToolChain")()
-		shortName(name)
+		_shortName(name)
 		if   tool_type == ToolType.INTERNAL:
 			InternalTools[name] = 1
 		elif tool_type == ToolType.EXTERNAL:
@@ -48,7 +48,7 @@ def enable(name, tool_type=ToolType.INTERNAL, error_on_error=False):
 	PyLog.warning("Continuing without module", module=name)
 
 
-def shortName(name):
+def _shortName(name):
 	"""
 	shortName(string()::Name) -> string()::Return
 
@@ -69,9 +69,11 @@ def _init():
 	"""
 	map(lambda x: enable(*x), Provided)
 
-class ToolChain():
-	NOT_IMPLEMENTED = None
+class API():
+		NOT_IMPLEMENTED_OK, NOT_IMPLEMENTED_ERROR = range(0,2)
 
+class ToolChain():
+	
 	def srcExts():
 		"""
 		Source Extensions
@@ -111,14 +113,14 @@ class ToolChain():
 		"""
 		return []
 
-	def clean(self, app):
-		"""
-		Clean
-		clean(config()) -> [command()] | ToolChain.NOT_IMPLEMENTED
+	"""
+	Clean
+	clean(config()) -> [command()] | ToolChain.NOT_IMPLEMENTED
 
-		Cleans this build stage.
-		"""
-		return ToolChain.NOT_IMPLEMENTED
+	Cleans this build stage.
+	"""
+	clean = API.NOT_IMPLEMENTED_OK
+	#	return ToolChain.NOT_IMPLEMENTED
 
 	def generate(self, app):
 		"""

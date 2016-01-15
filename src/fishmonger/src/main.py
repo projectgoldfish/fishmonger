@@ -67,7 +67,7 @@ def main():
 def runStage(stage, config):
 	PyLog.log(stage.title() + "...")
 	PyLog.increaseIndent()
-	configureStage(stage, config)
+	fishmonger.configureStage(stage, config)
 	PyLog.decreaseIndent()
 
 
