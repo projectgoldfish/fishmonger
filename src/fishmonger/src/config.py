@@ -90,10 +90,10 @@ class Config():
 			else:
 				raise FishExc.FishmongerConfigException("File config is invalid", terms=terms)
 
-	def __init__(self, source, types={}):
+	def __init__(self, source, types=None):
 		values      = {}
 		self.values = {}
-		self.types  = {self.configKey(k) : types[k] for k in types}
+		self.types  = {self.configKey(k) : types[k] for k in types} if types is not None else {}
 		if isinstance(source, str) and os.path.isfile(source):
 			parser = Config.FileParser()
 			values = parser.parse(source)
@@ -111,7 +111,7 @@ class Config():
 			raise FishExc.FishmongerConfigException("Cannot instantiate Config from", source=source)
 		
 		for k in values:
-			self.set(k, values[k])
+			self.__setitem__(k, values[k])
 
 	def __getitem__(self, key):
 		return self.values[self.configKey(key)]
@@ -130,20 +130,24 @@ class Config():
 	def configValue(self, key, value):
 		return value if key not in self.types else self.types[key](value)
 
-	def get(self, key, default=(None, False)):
+	def get(self, key, default=(None, False), single_as_list=False):
+		value = None
 		try:
-			return self.__getitem__(key)
+			value = self.__getitem__(key)
 		except KeyError as e:
 			if default == (None, False):
 				raise(e)
-			return default
+			value = default
+		if single_as_list and not isinstance(value, list):
+			value  = [value]
+		return value
 
 	def set(self, key, value):
 		self.__setitem__(key, value)
 
 class PriorityConfig(Config):
 	def __init__(self, *sources, **kwargs):
-		types = {} if not "types" in kwargs else kwargs["types"]
+		types = kwargs["types"] if "types" in kwargs else {}
 		Config.__init__(self, {}, types)
 		self.configs = []
 		for source in sources:
@@ -174,4 +178,18 @@ class PriorityConfig(Config):
 		config   = Config(config)
 		self.configs.append((priority, config))
 		self.configs.sort()
+
+class ConfigLib():
+		def __init__(self, types=None):
+			self.types   = types if types is not None else {}
+			self.configs = {}
+
+		def __getitem__(self, key):
+			return self.configs[key]
+
+		def __setitem__(self, key, source):
+			self.configs[key] = Config(source, types=self.types)
+
+		def __iter__(self):
+			return self.configs.keys().__iter__()
 

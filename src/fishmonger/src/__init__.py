@@ -87,15 +87,68 @@ def getAppDirs(root = "."):
 			app_dirs.append(app_dir)
 	return app_dirs
 
-def configure():
+def configure(config_lib):
 	"""
-	configure() -> [{}]
-
-	Generates base app configuration for all used tool chains.
+	configure(config_lib{}) -> config_lib{}
 	"""
 
-	pass
+	app_dirs = getAppDirs()
 
-def configureStage():
+	include_dirs = set()
+	lib_dirs     = set()
+	## Get all config files
+	for app_dir in ["."] + app_dirs:
+		include_dirs |= set(PyFind.findAllByPattern("*include*", root=child, dirs_only=True))
+		lib_dirs     |= set(PyFind.findAllByPattern("*lib*",     root=child, dirs_only=True))
+
+		for ext in ["", "app"] + FishTC.ShortNames.keys():
+			cfg_file = os.path.join(app_dir, ".fishmonger" + (ext if ext is "" else "." + ext))
+			config_lib[cfg_file] = cfg_file if os.path.isfile(cfg_file) else {}
+
+		## Find all dependencies
+		for cfg in config_lib:
+
+
+	return config_lib
+
+def runCommand(command):
 	pass
 	
+
+def configureStage(config_lib, stage):
+	"""
+	configureStage(confoglib{}, string()) -> config_lib{}
+	"""
+
+	tool_chains = [tc for (x, tc) in FishTC.Tools.iteritems() if :
+
+
+	return []
+
+def runStage(config_lib, stage):
+	"""
+	runStage(ConfigLib(), string()) -> config_lib{}
+	"""
+	PyLog.log(stage.title() + "...")
+	PyLog.increaseIndent()
+	map(runCommand, configureStage(config_lib, stage))
+	PyLog.decreaseIndent()
+
+def _retrieveCode():
+	(name, url) = codebase
+	target_dir  = PyPath.makeRelative(os.path.join(target, name))
+	
+	if name not in self.updated_repos:
+		self.updated_repos[name] = True
+		if not os.path.isdir(target_dir):
+			PyLog.log("Fetching", name)
+			PyRCS.clone(url, target_dir)
+		else:
+			if not skip_update:
+				PyLog.log("Updating", name)
+				PyRCS.update(target_dir)
+			else:
+				PyLog.log("Skipping", name)
+	
+	return target_dir
+

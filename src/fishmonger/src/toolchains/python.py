@@ -7,9 +7,10 @@ import pybase.log  as PyLog
 import pybase.sh   as PySH
 
 import fishmonger
+import fishmonger.toolchains
 import fishmonger.dirflags as DF
 
-class ToolChain(fishmonger.ToolChain):
+class ToolChain(fishmonger.toolchains.ToolChain):
 	def __init__(self):
 		self.defaults   = {
 			"APPLICATION" : False

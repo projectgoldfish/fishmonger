@@ -13,6 +13,9 @@ Tools      = {}
 ExternalTools = {} ## module() => 1
 InternalTools = {} ## module() => 1
 
+class API():
+		NOT_IMPLEMENTED_OK, NOT_IMPLEMENTED_ERROR = range(0,2)
+
 class ToolType:
 	INTERNAL, EXTERNAL = range(0, 2)
 
@@ -27,25 +30,27 @@ Provided = [
 	("fishmonger.toolchains.python",  ToolType.INTERNAL)
 ]
 
-def enable(name, tool_type=ToolType.INTERNAL, error_on_error=False):
+def enable(name, tool_type=ToolType.INTERNAL, ignore_error_on_error=True):
 	try:
-		Tools[name] = getattr(__import__(name), "ToolChain")()
+		Tools[name] = getattr(__import__(name, fromlist=["ToolChain"]), "ToolChain")()
 		_shortName(name)
+		PyLog.debug("Loaded toolchain", name, log_level=2)
 		if   tool_type == ToolType.INTERNAL:
 			InternalTools[name] = 1
 		elif tool_type == ToolType.EXTERNAL:
 			ExternalTools[name] = 1
 		else:
 			raise FishExc.FishmongerToolchainException("Invalid tool type given", tool_type=tool_type)
+		return
 	except AttributeError as e:
-		PyLog.error("Error loading module", module=name)
-		if error_on_error:
+		#PyLog.error("Error loading module", module=name, error=e)
+		if not ignore_error_on_error:
 			raise e
 	except ImportError as e:
-		PyLog.error("Error importing module", module=name)
-		if error_on_error:
+		#PyLog.error("Error importing module", module=name)
+		if not ignore_error_on_error:
 			raise e
-	PyLog.warning("Continuing without module", module=name)
+	PyLog.warning("Continuing without toolchain", name)
 
 
 def _shortName(name):
@@ -61,16 +66,13 @@ def _shortName(name):
 		ShortNames[name] = name.split(".")[-1]
 	return ShortNames[name]
 
-def _init():
+def init():
 	"""
 	init() -> no_return()
 
 	Initializes and enables the provided toolchains.
 	"""
 	map(lambda x: enable(*x), Provided)
-
-class API():
-		NOT_IMPLEMENTED_OK, NOT_IMPLEMENTED_ERROR = range(0,2)
 
 class ToolChain():
 	
@@ -184,5 +186,3 @@ class ToolChain():
 		Returns the list of commands() that must be run to publish the application.
 		"""
 		return ToolChain.NOT_IMPLEMENTED
-
-_init()
