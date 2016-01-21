@@ -87,29 +87,58 @@ def getAppDirs(root = "."):
 			app_dirs.append(app_dir)
 	return app_dirs
 
-def configure(config_lib):
+def retrieveCode(target, codebase, skip_update=False):
+	(name, url) = codebase
+	target_dir  = PyPath.makeRelative(os.path.join(target, name))
+	
+	if name not in self.updated_repos:
+		self.updated_repos[name] = True
+		if not os.path.isdir(target_dir):
+			PyLog.log("Fetching", name)
+			PyRCS.clone(url, target_dir)
+		else:
+			if not skip_update:
+				PyLog.log("Updating", name)
+				PyRCS.update(target_dir)
+			else:
+				PyLog.log("Skipping", name)
+	
+	return target_dir
+
+def configure(pconfig_lib, config_lib):
 	"""
 	configure(config_lib{}) -> config_lib{}
 	"""
-
+	config   = FishConfig.PriorityConfig(*[config_lib["cli"], config_lib["env"], config_lib[".fishmonger"]])
 	app_dirs = getAppDirs()
 
 	include_dirs = set()
 	lib_dirs     = set()
 	## Get all config files
-	for app_dir in ["."] + app_dirs:
+	app_dirs     = list(set(["."] + app_dirs))
+	for app_dir in app_dirs:
 		include_dirs |= set(PyFind.findAllByPattern("*include*", root=child, dirs_only=True))
 		lib_dirs     |= set(PyFind.findAllByPattern("*lib*",     root=child, dirs_only=True))
 
+		t_cfg_files  = []
+		t_tool_files = []
 		for ext in ["", "app"] + FishTC.ShortNames.keys():
 			cfg_file = os.path.join(app_dir, ".fishmonger" + (ext if ext is "" else "." + ext))
 			config_lib[cfg_file] = cfg_file if os.path.isfile(cfg_file) else {}
+			if ext in ["", "app"]:
+				t_cfg_files.append(cfg_file)
+			else:
+				t_tool_files.append(cfg_file)
+
+		t_cfg_files.reverse()
+		pconfig_lib[app_dir]     = [config_lib[x] for x in t_cfg_files]
+
 
 		## Find all dependencies
 		for cfg in config_lib:
 
 
-	return config_lib
+	return (pconfig_lib, config_lib)
 
 def runCommand(command):
 	pass
@@ -133,22 +162,3 @@ def runStage(config_lib, stage):
 	PyLog.increaseIndent()
 	map(runCommand, configureStage(config_lib, stage))
 	PyLog.decreaseIndent()
-
-def _retrieveCode():
-	(name, url) = codebase
-	target_dir  = PyPath.makeRelative(os.path.join(target, name))
-	
-	if name not in self.updated_repos:
-		self.updated_repos[name] = True
-		if not os.path.isdir(target_dir):
-			PyLog.log("Fetching", name)
-			PyRCS.clone(url, target_dir)
-		else:
-			if not skip_update:
-				PyLog.log("Updating", name)
-				PyRCS.update(target_dir)
-			else:
-				PyLog.log("Skipping", name)
-	
-	return target_dir
-

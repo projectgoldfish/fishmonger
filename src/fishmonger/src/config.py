@@ -193,3 +193,18 @@ class ConfigLib():
 		def __iter__(self):
 			return self.configs.keys().__iter__()
 
+class PriorityConfigLib():
+		def __init__(self, types=None):
+			self.types   = types if types is not None else {}
+			self.configs = {}
+
+		def __getitem__(self, key):
+			return self.configs[key]
+
+		def __setitem__(self, key, sources):
+			if not isinstance(sources, list):
+				sources = [sources]
+			self.configs[key] = PriorityConfig(*source, types=self.types)
+
+		def __iter__(self):
+			return self.configs.keys().__iter__()

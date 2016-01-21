@@ -64,11 +64,14 @@ def main():
 	}
 
 	config_lib   = FishConfig.ConfigLib(config_types)
+	pconfig_lib  = FishConfig.PriorityConfigLib(config_types)
 	config_lib["cli"]           = FishConfig.Config.Sources.CLI
 	config_lib["env"]           = FishConfig.Config.Sources.ENV
 	config_lib["./.fishmonger"] = ".fishmonger" if os.path.isfile(".fishmonger") else {}
 	
-	config       = FishConfig.PriorityConfig(*[config_lib["cli"], config_lib["env"], config_lib[".fishmonger"]])
+	pconfig_lib["system"]       = [config_lib["cli"], config_lib["env"], config_lib["./fishmonger"]]
+
+	config       = pconfig_lib["system"]
 
 	PyLog.setLogLevel(config.get("log_level", 0))
 
@@ -85,7 +88,7 @@ def main():
 		commands |= set([config[x].lower()])
 		x += 1
 	
-	config_lib = fishmonger.configure(config_lib)
+	config_lib = fishmonger.configure(pconfig_lib, config_lib)
 	reduce(fishmonger.runStage, [stage for stage in fishmonger.Stages if fishmonger.StageSynonyms[stage] & commands != set()], config_lib)
 
 main()
