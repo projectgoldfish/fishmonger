@@ -204,7 +204,7 @@ class PriorityConfigLib():
 		def __setitem__(self, key, sources):
 			if not isinstance(sources, list):
 				sources = [sources]
-			self.configs[key] = PriorityConfig(*source, types=self.types)
+			self.configs[key] = PriorityConfig(*sources, types=self.types)
 
 		def __iter__(self):
 			return self.configs.keys().__iter__()

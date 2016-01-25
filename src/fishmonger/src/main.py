@@ -69,7 +69,7 @@ def main():
 	config_lib["env"]           = FishConfig.Config.Sources.ENV
 	config_lib["./.fishmonger"] = ".fishmonger" if os.path.isfile(".fishmonger") else {}
 	
-	pconfig_lib["system"]       = [config_lib["cli"], config_lib["env"], config_lib["./fishmonger"]]
+	pconfig_lib["system"]       = [config_lib["cli"], config_lib["env"], config_lib["./.fishmonger"]]
 
 	config       = pconfig_lib["system"]
 

@@ -7,6 +7,8 @@ import pybase.log       as PyLog
 import pybase.find      as PyFind
 
 ## Fishmonger modules included
+import fishmonger.cache      as FishCache
+import fishmonger.config     as FishConfig
 import fishmonger.exceptions as FishExc
 import fishmonger.toolchains as FishTC
 
@@ -87,8 +89,12 @@ def getAppDirs(root = "."):
 			app_dirs.append(app_dir)
 	return app_dirs
 
-def retrieveCode(target, codebase, skip_update=False):
-	(name, url) = codebase
+def dependencyName(spec):
+	(name, url) = spec
+	return PyPath.makeRelative(os.path.join(target, name))
+
+def retrieveCode(target, spec, skip_update=False):
+	(name, url) = spec
 	target_dir  = PyPath.makeRelative(os.path.join(target, name))
 	
 	if name not in self.updated_repos:
@@ -109,33 +115,28 @@ def configure(pconfig_lib, config_lib):
 	"""
 	configure(config_lib{}) -> config_lib{}
 	"""
-	config   = FishConfig.PriorityConfig(*[config_lib["cli"], config_lib["env"], config_lib[".fishmonger"]])
+	config   = FishConfig.PriorityConfig(*[config_lib["cli"], config_lib["env"], config_lib["./.fishmonger"]])
 	app_dirs = getAppDirs()
 
+	dependencies = set()
 	include_dirs = set()
 	lib_dirs     = set()
 	## Get all config files
-	app_dirs     = list(set(["."] + app_dirs))
+	app_dirs     = list(set(["./"] + app_dirs))
 	for app_dir in app_dirs:
-		include_dirs |= set(PyFind.findAllByPattern("*include*", root=child, dirs_only=True))
-		lib_dirs     |= set(PyFind.findAllByPattern("*lib*",     root=child, dirs_only=True))
+		include_dirs |= set(PyFind.findAllByPattern("*include*", root=app_dir, dirs_only=True))
+		lib_dirs     |= set(PyFind.findAllByPattern("*lib*",     root=app_dir, dirs_only=True))
 
-		t_cfg_files  = []
-		t_tool_files = []
 		for ext in ["", "app"] + FishTC.ShortNames.keys():
 			cfg_file = os.path.join(app_dir, ".fishmonger" + (ext if ext is "" else "." + ext))
 			config_lib[cfg_file] = cfg_file if os.path.isfile(cfg_file) else {}
-			if ext in ["", "app"]:
-				t_cfg_files.append(cfg_file)
-			else:
-				t_tool_files.append(cfg_file)
 
-		t_cfg_files.reverse()
-		pconfig_lib[app_dir]     = [config_lib[x] for x in t_cfg_files]
-
-
+			dependency_specs = config_lib[cfg_file].get("dependencies", [])
+			for dependency in dependency_specs:
+				pass
 		## Find all dependencies
 		for cfg in config_lib:
+			pass
 
 
 	return (pconfig_lib, config_lib)
@@ -149,7 +150,7 @@ def configureStage(config_lib, stage):
 	configureStage(confoglib{}, string()) -> config_lib{}
 	"""
 
-	tool_chains = [tc for (x, tc) in FishTC.Tools.iteritems() if :
+	#tool_chains = [tc for (x, tc) in FishTC.Tools.iteritems() if :
 
 
 	return []

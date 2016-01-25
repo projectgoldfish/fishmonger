@@ -5,6 +5,7 @@ import pybase.log  as PyLog
 import pybase.find as PyFind
 
 ## Fishmonger modules included
+import fishmonger.cache      as FishCache
 import fishmonger.exceptions as FishExc
 
 ShortNames = {}
@@ -14,7 +15,7 @@ ExternalTools = {} ## module() => 1
 InternalTools = {} ## module() => 1
 
 class API():
-		NOT_IMPLEMENTED_OK, NOT_IMPLEMENTED_ERROR = range(0,2)
+		NOT_IMPLEMENTED_OK, NOT_IMPLEMENTED_ERR = range(0,2)
 
 class ToolType:
 	INTERNAL, EXTERNAL = range(0, 2)
@@ -32,9 +33,29 @@ Provided = [
 
 def enable(name, tool_type=ToolType.INTERNAL, ignore_error_on_error=True):
 	try:
-		Tools[name] = getattr(__import__(name, fromlist=["ToolChain"]), "ToolChain")()
-		_shortName(name)
-		PyLog.debug("Loaded toolchain", name, log_level=2)
+		tool  = getattr(__import__(name, fromlist=["ToolChain"]), "ToolChain")()
+		valid = False
+		if hasattr(tool.check_sys, "__call__"):
+			if FishCache.getToolVersion(name) != tool.version:
+				valid = tool.check_sys()
+				if isinstance(valid, bool):
+					FishCache.setToolVersion(name, tool.version)
+				else:
+					raise FishExc.FishmongerToolchainException("Tools check_sys returns invalid result", tool=name, result=valid)
+		elif tool.check_sys == API.NOT_IMPLEMENTED_OK:
+			valid = True
+		else:
+			raise FishExc.FishmongerToolchainException("Invalid value for tool.check_sys", check_sys=tool.check_sys)
+
+		if valid:
+			Tools[name] = tool
+			_shortName(name)
+			PyLog.debug("Loaded toolchain", name, log_level=2)
+		else:
+			if ignore_error_on_error:
+				PyLog.warning("Tool does not meet system dependencies. Continuing without...", tool=name)
+			raise FishExc.FishmongerToolchainException("Tool does not meet system dependencies.", tool=name)
+
 		if   tool_type == ToolType.INTERNAL:
 			InternalTools[name] = 1
 		elif tool_type == ToolType.EXTERNAL:
@@ -116,73 +137,82 @@ class ToolChain():
 		return []
 
 	"""
+	Version
+	version - integer()
+
+	Integer value that is to be increased whenever a tool is updated.
+	This helps determine if we need to check system for dependencies.
+	"""
+	version = 1
+
+	"""
+	CheckSys
+	check_sys() -> boolean() | ToolChain.NOT_IMPLEMENTED
+
+	Validates system components exist
+	"""
+	check_sys = API.NOT_IMPLEMENTED_OK
+
+	"""
 	Clean
 	clean(config()) -> [command()] | ToolChain.NOT_IMPLEMENTED
 
 	Cleans this build stage.
 	"""
 	clean = API.NOT_IMPLEMENTED_OK
-	#	return ToolChain.NOT_IMPLEMENTED
 
-	def generate(self, app):
-		"""
-		Generate
-		generate(config()) -> [command()] | ToolChain.NOT_IMPLEMENTED
+	"""
+	Generate
+	generate(config()) -> [command()] | ToolChain.NOT_IMPLEMENTED
 
-		Returns the list of commands() that must be run to generate code for the application.
-		"""
-		return ToolChain.NOT_IMPLEMENTED
+	Returns the list of commands() that must be run to generate code for the application.
+	"""
+	generate = API.NOT_IMPLEMENTED_OK
 
-	def build(self, app):
-		"""
-		Build
-		build(config()) -> [command()] | ToolChain.NOT_IMPLEMENTED
+	"""
+	Build
+	build(config()) -> [command()] | ToolChain.NOT_IMPLEMENTED
 
-		Returns the list of commands() that must be run to build the application.
-		"""
-		return ToolChain.NOT_IMPLEMENTED
+	Returns the list of commands() that must be run to build the application.
+	"""
+	build = API.NOT_IMPLEMENTED_OK
 
-	def link(self, app):
-		"""
-		Link
-		link(config()) -> [command()] | ToolChain.NOT_IMPLEMENTED
+	"""
+	Link
+	link(config()) -> [command()] | ToolChain.NOT_IMPLEMENTED
 
-		Returns the list of commands() that must be run to link the application.
-		"""
-		return ToolChain.NOT_IMPLEMENTED
+	Returns the list of commands() that must be run to link the application.
+	"""
+	link = API.NOT_IMPLEMENTED_OK
 
-	def install(self, app):
-		"""
-		Install
-		install(config()) -> [command()] | ToolChain.NOT_IMPLEMENTED
+	"""
+	Install
+	install(config()) -> [command()] | ToolChain.NOT_IMPLEMENTED
 
-		Returns the list of commands() that must be run to install the application.
-		"""
-		return ToolChain.NOT_IMPLEMENTED
+	Returns the list of commands() that must be run to install the application.
+	"""
+	install = API.NOT_IMPLEMENTED_ERR
 
-	def document(self, app):
-		"""
-		Document
-		document(config()) -> [command()] | ToolChain.NOT_IMPLEMENTED
+	"""
+	Document
+	document(config()) -> [command()] | ToolChain.NOT_IMPLEMENTED
 
-		Returns the list of commands() that must be run to document the application.
-		"""
-		return ToolChain.NOT_IMPLEMENTED
+	Returns the list of commands() that must be run to document the application.
+	"""
+	document = API.NOT_IMPLEMENTED_OK
 
-	def package(self, app):
-		"""
-		Package
-		package(config()) -> [command()] | ToolChain.NOT_IMPLEMENTED
+	"""
+	Package
+	package(config()) -> [command()] | ToolChain.NOT_IMPLEMENTED
 
-		Returns the list of commands() that must be run to package the application.
-		"""
-		return ToolChain.NOT_IMPLEMENTED
+	Returns the list of commands() that must be run to package the application.
+	"""
+	package = API.NOT_IMPLEMENTED_OK
 
-	def publish(self, app):
-		"""
-		Publish
-		ppublish(config()) -> [command()] | ToolChain.NOT_IMPLEMENTED
+	"""
+	Publish
+	ppublish(config()) -> [command()] | ToolChain.NOT_IMPLEMENTED
 
-		Returns the list of commands() that must be run to publish the application.
-		"""
-		return ToolChain.NOT_IMPLEMENTED
+	Returns the list of commands() that must be run to publish the application.
+	"""
+	publish = API.NOT_IMPLEMENTED_OK
