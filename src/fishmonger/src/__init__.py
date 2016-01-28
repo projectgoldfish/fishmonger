@@ -3,10 +3,10 @@ import os
 import sys
 
 ## PyBase modules included
-import pybase.log       as PyLog
-import pybase.find      as PyFind
+import pybase.log            as PyLog
 
 ## Fishmonger modules included
+import fishmonger.path       as FishPath
 import fishmonger.cache      as FishCache
 import fishmonger.config     as FishConfig
 import fishmonger.exceptions as FishExc
@@ -80,6 +80,7 @@ def getAppDirs(root = "."):
 
 		return acc
 
+	root = FishPath.Path(root)
 	tree = reduce(makeAppDirTree, scanSrcDirs(None, root, None), {})
 
 	app_dirs = []

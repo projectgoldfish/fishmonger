@@ -15,7 +15,6 @@ import fishmonger.toolchains as FishTC
 
 ## PyBase modules included
 import pybase.log       as PyLog
-import pybase.find      as PyFind
 
 if sys.version_info < (2, 7):
 	"""
