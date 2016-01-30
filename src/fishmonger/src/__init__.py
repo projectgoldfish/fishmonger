@@ -36,7 +36,7 @@ StageSynonyms = {
 
 def getAppDirs(root = "."):
 	"""
-	getAppDirs(string()::Root) -> [string()]::Return
+	getAppDirs(string()|path()::Root) -> [path()]::Return
 
 	Scans the directory structure to determine the application directories.
 
@@ -51,22 +51,23 @@ def getAppDirs(root = "."):
 
 		Scans the directory structure for src directories and thier parents.
 		"""
-		if app_dirs == None:
-			app_dirs = []
-
-		app_dirs.append((parent, root))
-		src_dir   = os.path.join(root, "src")
 		
-		nparent = root
-		dirs    = []
-		if os.path.isdir(src_dir):
-			dirs = PyFind.getDirDirs(src_dir)
+		root     = root if isinstance(root, FishPath.Path) else FishPath.Path(root)
+		app_dirs = app_dirs if app_dirs is not None else []
+		
+		app_dirs.append((parent, root))
+		src_dir  = root.join("src")
+		
+		nparent  = root
+		dirs     = []
+		if src_dir.isdir():
+			dirs = src_dir.find(dirs_only=True)
 		else:
 			nparent = parent
-			dirs    = PyFind.getDirDirs(root)
+			dirs    = root.find(dirs_only=True)
 
 		for d in dirs:
-			if os.path.basename(d)[0] != ".":
+			if d.basename()[0] != ".":
 				scanSrcDirs(nparent, d, app_dirs)
 
 		return app_dirs
@@ -74,7 +75,7 @@ def getAppDirs(root = "."):
 	def makeAppDirTree(acc, dirs):
 		(parent, child) = dirs
 		
-		children = acc.get(parent, [])
+		children    = acc.get(parent, [])
 		children.append(child)
 		acc[parent] = children
 
@@ -95,12 +96,13 @@ def dependencyName(spec):
 	return PyPath.makeRelative(os.path.join(target, name))
 
 def retrieveCode(target, spec, skip_update=False):
+	target      = target if isinstance(target. FishPath.Path) else FishPath.Path(target)
 	(name, url) = spec
-	target_dir  = PyPath.makeRelative(os.path.join(target, name))
+	target_dir  = target.join(name).relative()
 	
 	if name not in self.updated_repos:
 		self.updated_repos[name] = True
-		if not os.path.isdir(target_dir):
+		if not target_dir.isdir():
 			PyLog.log("Fetching", name)
 			PyRCS.clone(url, target_dir)
 		else:
@@ -112,34 +114,34 @@ def retrieveCode(target, spec, skip_update=False):
 	
 	return target_dir
 
+import time
 def configure(pconfig_lib, config_lib):
 	"""
 	configure(config_lib{}) -> config_lib{}
 	"""
+	a = time.time()
 	config   = FishConfig.PriorityConfig(*[config_lib["cli"], config_lib["env"], config_lib["./.fishmonger"]])
+	
 	app_dirs = getAppDirs()
-
 	dependencies = set()
 	include_dirs = set()
 	lib_dirs     = set()
 	## Get all config files
-	app_dirs     = list(set(["./"] + app_dirs))
+	app_dirs     = list(set([FishPath.Path("./")] + app_dirs))
 	for app_dir in app_dirs:
-		include_dirs |= set(PyFind.findAllByPattern("*include*", root=app_dir, dirs_only=True))
-		lib_dirs     |= set(PyFind.findAllByPattern("*lib*",     root=app_dir, dirs_only=True))
-
-		for ext in ["", "app"] + FishTC.ShortNames.keys():
-			cfg_file = os.path.join(app_dir, ".fishmonger" + (ext if ext is "" else "." + ext))
-			config_lib[cfg_file] = cfg_file if os.path.isfile(cfg_file) else {}
+		include_dirs |= set(app_dir.find(pattern="include", dirs_only=True))
+		lib_dirs     |= set(app_dir.find(pattern="lib",     dirs_only=True))
+		for ext in ["", "app"] + FishTC.ShortNames.values():
+			ext      = ext if ext is "" else "." + ext
+			cfg_file = app_dir.join(".fishmonger" + ext)
+			config_lib[cfg_file] = cfg_file if cfg_file.isfile() else {}
 
 			dependency_specs = config_lib[cfg_file].get("dependencies", [])
 			for dependency in dependency_specs:
-				pass
+				print dependency
 		## Find all dependencies
 		for cfg in config_lib:
 			pass
-
-
 	return (pconfig_lib, config_lib)
 
 def runCommand(command):

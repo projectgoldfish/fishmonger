@@ -24,6 +24,12 @@ class Path():
 		path = path if not isinstance(path, Path) else path._path
 		self._path = OSP.abspath(path)
 
+	def __get__(self, index):
+		return self._path[index]
+
+	def __getitem__(self, index):
+		return self.__get__(index)
+
 	def __hash__(self):
 		return hash(self._path)
 
@@ -39,7 +45,7 @@ class Path():
 			return self._path == other._path
 		elif isinstance(other, str):
 			return self._path == other
-		raise NotImplementedError
+		return False
 
 	def relative(self, root="."):
 		return Path(OSP.relpath(self._path, root))
@@ -59,8 +65,8 @@ class Path():
 	def dirname(self):
 		return Path(OSP.dirname(self._path))
 
-	def join(self, other):
-		return Path(OSP.join(self._path, str(other)))
+	def join(self, *others):
+		return Path(OSP.join(self._path, *[str(x) for x in others]))
 
 	def mkdir(self):
 		self._action(self._mkdirDir, self._mkdirFile, self._mkdirNone)
@@ -138,17 +144,19 @@ class Path():
 	def _lsNone(self, pattern):
 		return []
 
-	def find(self, pattern="*"):
-		return self._action(self._findDir, self._findFile, self._findNone, pattern=pattern)
-	def _findDir(self, pattern):
+	def find(self, **kwargs):
+		return self._action(self._findDir, self._findFile, self._findNone, **kwargs)
+	def _findDir(self, pattern="*", dirs_only=False, files_only=False):
 		found = []
 		for root, t_dirs, t_files in OS.walk(self._path):
-			found += [Path(OSP.join(root, t_d)) for t_d in t_dirs  if FNMatch.fnmatch(t_d, pattern)]
-			found += [Path(OSP.join(root, t_f)) for t_f in t_files if FNMatch.fnmatch(t_f, pattern)]
+			if not files_only:
+				found += [Path(OSP.join(root, t_d)) for t_d in t_dirs  if t_d[0] != "." and FNMatch.fnmatch(t_d, pattern)]
+			if not dirs_only:
+				found += [Path(OSP.join(root, t_f)) for t_f in t_files if t_f[0] != "." and FNMatch.fnmatch(t_f, pattern)]
 		return found
-	def _findFile(self, pattern):
+	def _findFile(self, pattern="*", **kwargs):
 		return self._matchFiles([self._path], pattern)
-	def _findNone(self, pattern):
+	def _findNone(self, **kwargs):
 		return []
 
 	def _action(self, dir_action, file_action, error_action, *args, **kwargs):
@@ -161,12 +169,3 @@ class Path():
 
 	def _matchFiles(self, files, pattern):
 		return [Path(f) for f in files if FNMatch.fnmatch(str(f), pattern)]
-
-	
-
-
-
-
-
-
-

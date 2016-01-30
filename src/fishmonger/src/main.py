@@ -16,6 +16,8 @@ import fishmonger.toolchains as FishTC
 ## PyBase modules included
 import pybase.log       as PyLog
 
+print "start"
+
 if sys.version_info < (2, 7):
 	"""
 	Assure that python is at least 2.7
@@ -86,8 +88,9 @@ def main():
 	while x in config:
 		commands |= set([config[x].lower()])
 		x += 1
-	
-	config_lib = fishmonger.configure(pconfig_lib, config_lib)
-	reduce(fishmonger.runStage, [stage for stage in fishmonger.Stages if fishmonger.StageSynonyms[stage] & commands != set()], config_lib)
-
+	try:
+		config_lib = fishmonger.configure(pconfig_lib, config_lib)
+		reduce(fishmonger.runStage, [stage for stage in fishmonger.Stages if fishmonger.StageSynonyms[stage] & commands != set()], config_lib)
+	except Exception as e:
+		print e
 main()

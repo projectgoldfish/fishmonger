@@ -1,5 +1,6 @@
 ## Python modules included
 import sys
+import json
 import os.path
 
 ## PyBase modules included
@@ -7,6 +8,7 @@ import pybase.log as PyLog
 
 ## Fishmonger modules included
 #import fishmonger.exceptions as FishExc
+import fishmonger.path       as FishPath
 import fishmonger.exceptions as FishExc
 
 """
@@ -97,6 +99,9 @@ class Config():
 		if isinstance(source, str) and os.path.isfile(source):
 			parser = Config.FileParser()
 			values = parser.parse(source)
+		elif isinstance(source, FishPath.Path) and source.isfile():
+			parser = Config.FileParser()
+			values = parser.parse(str(source))
 		elif isinstance(source, dict):
 			values = source
 		elif isinstance(source, Config):
@@ -108,7 +113,7 @@ class Config():
 			parser = Config.ENVParser()
 			values = parser.parse()
 		else:
-			raise FishExc.FishmongerConfigException("Cannot instantiate Config from", source=source)
+			raise FishExc.FishmongerConfigException("Cannot instantiate Config from", source=source, type=type(source))
 		
 		for k in values:
 			self.__setitem__(k, values[k])
@@ -123,6 +128,9 @@ class Config():
 
 	def __contains__(self, key):
 		return key in self.values
+
+	def __repr__(self):
+		return json.dumps(self.values)
 
 	def configKey(self, key):
 		return key.lower() if isinstance(key, str) else key
@@ -193,18 +201,16 @@ class ConfigLib():
 		def __iter__(self):
 			return self.configs.keys().__iter__()
 
-class PriorityConfigLib():
+		def keys(self):
+			return self.configs.keys()
+
+class PriorityConfigLib(ConfigLib):
 		def __init__(self, types=None):
 			self.types   = types if types is not None else {}
 			self.configs = {}
-
-		def __getitem__(self, key):
-			return self.configs[key]
 
 		def __setitem__(self, key, sources):
 			if not isinstance(sources, list):
 				sources = [sources]
 			self.configs[key] = PriorityConfig(*sources, types=self.types)
 
-		def __iter__(self):
-			return self.configs.keys().__iter__()
