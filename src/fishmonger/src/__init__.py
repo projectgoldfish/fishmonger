@@ -2,8 +2,14 @@
 import os
 import sys
 
-## PyBase modules included
+import functools
+
+import multiprocessing
+
+## RlesZilm imports
+import pyrcs                 as PyRCS
 import pybase.log            as PyLog
+
 
 ## Fishmonger modules included
 import fishmonger.path       as FishPath
@@ -11,6 +17,7 @@ import fishmonger.cache      as FishCache
 import fishmonger.config     as FishConfig
 import fishmonger.exceptions as FishExc
 import fishmonger.toolchains as FishTC
+import fishmonger.parallel   as FishParallel
 
 Stages = [
 	"clean",
@@ -33,6 +40,29 @@ StageSynonyms = {
 	"package"  : set(["package"]),
 	"publish"  : set(["publish"])
 }
+
+Manager       = multiprocessing.Manager()
+UpdatedRepos  = Manager.dict()
+
+def retrieveCode(target, spec, skip_update=False):
+	target      = target if isinstance(target, FishPath.Path) else FishPath.Path(target)
+	(name, url) = spec
+	target_dir  = target.join(name).relative()
+	
+	if name not in UpdatedRepos:
+		UpdatedRepos[name] = True
+		if not target_dir.isdir():
+			PyLog.log("Fetching", name)
+			PyRCS.clone(url, str(target_dir))
+		else:
+			if not skip_update:
+				PyLog.log("Updating", name)
+				PyRCS.update(str(target_dir))
+			else:
+				PyLog.log("Skipping", name)
+	
+	return target_dir
+
 
 def getAppDirs(root = "."):
 	"""
@@ -95,53 +125,43 @@ def dependencyName(spec):
 	(name, url) = spec
 	return PyPath.makeRelative(os.path.join(target, name))
 
-def retrieveCode(target, spec, skip_update=False):
-	target      = target if isinstance(target. FishPath.Path) else FishPath.Path(target)
-	(name, url) = spec
-	target_dir  = target.join(name).relative()
-	
-	if name not in self.updated_repos:
-		self.updated_repos[name] = True
-		if not target_dir.isdir():
-			PyLog.log("Fetching", name)
-			PyRCS.clone(url, target_dir)
-		else:
-			if not skip_update:
-				PyLog.log("Updating", name)
-				PyRCS.update(target_dir)
-			else:
-				PyLog.log("Skipping", name)
-	
-	return target_dir
-
-import time
 def configure(pconfig_lib, config_lib):
 	"""
 	configure(config_lib{}) -> config_lib{}
 	"""
-	a = time.time()
-	config   = FishConfig.PriorityConfig(*[config_lib["cli"], config_lib["env"], config_lib["./.fishmonger"]])
 	
-	app_dirs = getAppDirs()
-	dependencies = set()
-	include_dirs = set()
-	lib_dirs     = set()
+	configured      = False
+	config          = FishConfig.PriorityConfig(*[config_lib["cli"], config_lib["env"], config_lib["./.fishmonger"]])
+	
+	app_dirs        = getAppDirs()
+	
+	include_dirs    = set()
+	lib_dirs        = set()
+
 	## Get all config files
-	app_dirs     = list(set([FishPath.Path("./")] + app_dirs))
-	for app_dir in app_dirs:
-		include_dirs |= set(app_dir.find(pattern="include", dirs_only=True))
-		lib_dirs     |= set(app_dir.find(pattern="lib",     dirs_only=True))
+	app_dirs        = list(set([FishPath.Path("./")] + app_dirs))
+	retrieveCodeFun = functools.partial(retrieveCode, config.get("dependency_dir", "deps"), skip_update=config.get("skip_dep_update", False))
+	
+	x = 0
+	while x < len(app_dirs): 
+		app_dir          = app_dirs[x]
+		t_dependencies   = set()
+		
+		include_dirs    |= set(app_dir.find(pattern="include", dirs_only=True))
+		lib_dirs        |= set(app_dir.find(pattern="lib",     dirs_only=True))
 		for ext in ["", "app"] + FishTC.ShortNames.values():
 			ext      = ext if ext is "" else "." + ext
 			cfg_file = app_dir.join(".fishmonger" + ext)
 			config_lib[cfg_file] = cfg_file if cfg_file.isfile() else {}
 
 			dependency_specs = config_lib[cfg_file].get("dependencies", [])
-			for dependency in dependency_specs:
-				print dependency
-		## Find all dependencies
-		for cfg in config_lib:
-			pass
+			t_dependencies  |= set(dependency_specs)
+		
+		[app_dirs.append(dep_dir) for dep_dir in FishParallel.processObjects(list(t_dependencies), retrieveCodeFun, max_cores=config.get("max_cores", None), acc0=[])]
+		x += 1	
+		
+
+
 	return (pconfig_lib, config_lib)
 
 def runCommand(command):

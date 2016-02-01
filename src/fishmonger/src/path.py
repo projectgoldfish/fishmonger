@@ -96,7 +96,6 @@ class Path():
 
 		for (root, t_dirs, t_files) in OS.walk(self._path):
 			if target == OSP.commonprefix([root, target]):
-				#print root, target
 				continue
 
 			for t_dir in t_dirs:
@@ -104,13 +103,11 @@ class Path():
 				if s_path == target:
 					continue
 				t_path = Path(target, OSP.relpath(str(s_path), str(self)))
-				print "Make", t_path
 				t_path.mkdir()
 
 			for t_file in t_files:
 				s_path = Path(root, t_file)
 				t_path = Path(target, OSP.relpath(str(s_path), str(self)))
-				#print s_path, "->", t_path
 				s_path.copy(t_path)
 	def _copyFile(self, target):
 		target.dirname().mkdir()

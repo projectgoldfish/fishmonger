@@ -17,11 +17,19 @@ import multiprocessing
 import pybase.log       as PyLog
 import pybase.exception as PyException
 
+shutdown  = multiprocessing.Event()
+processes = {}
+
 class ParallelException(PyException.BaseException):
 	pass
 
 class ParallelTaskException(PyException.BaseException):
 	pass
+
+class DependentObject():
+	def __init__(self, data, dependencies):
+		self.data         = data
+		self.dependencies = dependencies
 
 class ParallelTask(multiprocessing.Process):
 	"""
@@ -32,29 +40,41 @@ class ParallelTask(multiprocessing.Process):
 	The user must implement action.
 	"""
 
-	def __init__(self, data, reduce_queue):
+	def __init__(self, action, data, reduce_queue):
 		multiprocessing.Process.__init__(self)
 
-		signal.signal(signal.SIGINT, signal.SIG_IGN)
-
+		self.action       = action
 		self.data         = data
 		self.reduce_queue = reduce_queue
 
 	def run(self):
+		signal.signal(signal.SIGINT, signal.SIG_IGN)
+
 		res   = None
 		error = None
 		try:
-			res   = self.action(self.app)
+			res   = self.action(self.data)
 		except PyException.BaseException as e:
 			error = e
 		except Exception as e:
-			error = ParallelTaskException(str(e), trace=sys.exec_info())
-		self.clean_queue.put((self.data, error, res))
+			error = ParallelTaskException(str(e), trace=sys.exc_info())
+		self.reduce_queue.put((self.data, error, res))
 
 	def action(self, object):
 		raise(ParallelTaskException("ParallelTask action not defined"))
 
-def processObjects(task_class, objects, reducer=None, max_cores=None):
+def wait():
+	for t in processes:
+		if processes[t] != None and processes[t].is_alive():
+			processes[t].terminate()
+			processes[t].join()
+
+def defaultReducer(obj, acc=None):
+	acc = acc if acc is not None else []
+	acc.append(obj)
+	return acc
+
+def processObjects(objects, action, reducer=None, max_cores=None, acc0=None):
 	"""
 	processObjects(task()::Task, [data()]::Data, fun(term()::New, term()::Accumulator) -> data()::Reducer, integer(>=1)::Cores) -> data() :: Result
 	
@@ -73,13 +93,16 @@ def processObjects(task_class, objects, reducer=None, max_cores=None):
 
 	Result  - The final value of the accumulator or None if no accumulator is provided
 	"""
-	manager          = multiprocessing.Manager()
-	result_queue     = manager.Queue()
+	acc0             = acc0      if acc0      is not None else []
+	reducer          = reducer   if reducer   is not None else defaultReducer
+	max_cores        = max_cores if max_cores is not None else multiprocessing.cpu_count()
 
-	acc              = None
+	#manager          = multiprocessing.Manager()
+	#result_queue     = manager.Queue()
+	result_queue     = multiprocessing.Queue()
+
 	used_cores       = 0
 	error            = False
-	tasks            = {}
 
 	## Loop until we explicitly break
 	while True:
@@ -94,7 +117,8 @@ def processObjects(task_class, objects, reducer=None, max_cores=None):
 			"""
 			If we were able to get an object dispatch it.
 			"""
-			tasks[obj] =  task_class(obj, result_queue)
+			processes[obj] =  ParallelTask(action, obj, result_queue)
+			processes[obj].start()
 			used_cores += 1
 
 			if used_cores < max_cores:
@@ -105,49 +129,50 @@ def processObjects(task_class, objects, reducer=None, max_cores=None):
 		
 		"""
 		If we do not immediately continue then we are either using all cores or we have no
-		tasks that cannot be started until a dependency completes.
+		processes that cannot be started until a dependency completes.
 
 		Wait for a running task to complete, perform cleanup, then attempt to dispatch.
 		"""
 		(r_obj, error, res) = result_queue.get()
 		if error != None:
 			"""
-			If the task resulted in error halt running tasks and rasie the error.
+			If the task resulted in error halt running processes and rasie the error.
 			"""
-			for t in tasks:
-				if tasks[t] != None:
-					tasks[t].terminate()
-					tasks[t].join()
+			for t in processes:
+				if processes[t] != None:
+					processes[t].terminate()
+					processes[t].join()
 			raise(error)
 		if reducer != None:
-			acc = reducer(res, acc)
-
-		if tasks[r_obj].is_alive():
-			tasks[r_obj].join()
-		tasks[r_obj]  = None
-		used_cores   -= 1
+			acc0 = reducer(res, acc0)
+			
+		if processes[r_obj].is_alive():
+			processes[r_obj].join()
+		processes[r_obj]  = None
+		used_cores       -= 1
 
 	"""
 	At this point all objects have been dispatched. Retrieve final calculations, run reduce, return
 	"""
 	while used_cores > 0:
-		(r_obj, error, res) = result_queue.get()
+		(r_obj, error, res) = result_queue.get(block=True, timeout=1000)
+
 		if error != None:
 			"""
-			If the task resulted in error halt running tasks and raise the error.
+			If the task resulted in error halt running processes and raise the error.
 			"""
-			for t in tasks:
-				if tasks[t] != None and tasks[t].is_alive():
-					tasks[t].terminate()
-					tasks[t].join()
+			for t in processes:
+				if processes[t] != None and processes[t].is_alive():
+					processes[t].terminate()
+					processes[t].join()
 			raise(error)
 		if reducer != None:
-			acc = reducer(res, acc)
+			acc0 = reducer(res, acc0)
 
-		tasks[r_obj].join()
-		tasks[r_obj]  = None
-		used_cores   -= 1
-	return acc
+		processes[r_obj].join()
+		processes[r_obj]  = None
+		used_cores       -= 1
+	return acc0
 
 
 def getObject(objects):
@@ -168,12 +193,11 @@ def getObject(objects):
 
 	for x in range(len(objects)):
 		obj = objects[x]
-		if isinstance(obj, tuple):
-			(data, dependencies) = obj
-			if len(dependencies) == 0:
+		if isinstance(obj, DependentObject):
+			if len(obj.dependencies) == 0:
 				objects.pop(x)
-				return (data, objects)
+				return (obj.data, objects)
 		else:
 			objects.pop(x)
-			return (data, objects)
+			return (obj, objects)
 	return (None, objects)

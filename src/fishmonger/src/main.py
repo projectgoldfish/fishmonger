@@ -12,11 +12,10 @@ import fishmonger
 import fishmonger.config     as FishConfig
 import fishmonger.exceptions as FishExc
 import fishmonger.toolchains as FishTC
+import fishmonger.parallel   as FishParallel
 
 ## PyBase modules included
 import pybase.log       as PyLog
-
-print "start"
 
 if sys.version_info < (2, 7):
 	"""
@@ -30,7 +29,13 @@ def ctrl_c(signal, frame):
 	"""
 	Catch CTRL+C and exit cleanly
 	"""
+	print ""
 	PyLog.log("Exiting on CTRL+C")
+
+	FishParallel.shutdown.set()
+
+	FishParallel.wait()
+
 	sys.exit(0)
 signal.signal(signal.SIGINT, ctrl_c)
 
@@ -61,7 +66,8 @@ def main():
 	config_types = {
 		"allow_invalid_tools" : toBool,
 		"log_level"           : int,
-		"skip_dep_update"     : toBool
+		"skip_dep_update"     : toBool,
+		"max_cores"           : int
 	}
 
 	config_lib   = FishConfig.ConfigLib(config_types)
@@ -88,9 +94,10 @@ def main():
 	while x in config:
 		commands |= set([config[x].lower()])
 		x += 1
-	try:
-		config_lib = fishmonger.configure(pconfig_lib, config_lib)
-		reduce(fishmonger.runStage, [stage for stage in fishmonger.Stages if fishmonger.StageSynonyms[stage] & commands != set()], config_lib)
-	except Exception as e:
-		print e
+	#try:
+	PyLog.log("Configuring...")
+	config_lib = fishmonger.configure(pconfig_lib, config_lib)
+	reduce(fishmonger.runStage, [stage for stage in fishmonger.Stages if fishmonger.StageSynonyms[stage] & commands != set()], config_lib)
+	#except Exception as e:
+	#	print e
 main()
