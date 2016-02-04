@@ -6,10 +6,12 @@ import functools
 
 import multiprocessing
 
+## Dependency imports
+import networkx as NX
+
 ## RlesZilm imports
 import pyrcs                 as PyRCS
 import pybase.log            as PyLog
-
 
 ## Fishmonger modules included
 import fishmonger.path       as FishPath
@@ -142,6 +144,9 @@ def configure(pconfig_lib, config_lib):
 	app_dirs        = list(set([FishPath.Path("./")] + app_dirs))
 	retrieveCodeFun = functools.partial(retrieveCode, config.get("dependency_dir", "deps"), skip_update=config.get("skip_dep_update", False))
 	
+	"""
+	Get all config files and checkout all needed code
+	"""
 	x = 0
 	while x < len(app_dirs): 
 		app_dir          = app_dirs[x]
@@ -160,29 +165,88 @@ def configure(pconfig_lib, config_lib):
 		[app_dirs.append(dep_dir) for dep_dir in FishParallel.processObjects(list(t_dependencies), retrieveCodeFun, max_cores=config.get("max_cores", None), acc0=[])]
 		x += 1	
 		
+	config_lib["gen"]["include_dirs"] = list(include_dirs)
+	config_lib["gen"]["lib_dirs"]     = list(lib_dirs)
+	config_lib["gen"]["app_dirs"]     = app_dirs
 
+	"""
+	Generate all PriorityConfig
+	"""
+	print "++++++++"
+	for app_dir in app_dirs:
+		for tool in FishTC.Tools.keys():
+			print (tool, app_dir)
+			pconfig_lib[(tool, app_dir)] = [
+				config_lib["cli"],
+				config_lib["env"],
+				config_lib[app_dir.join(".fishmonger." + FishTC.ShortNames[tool])],
+				config_lib[app_dir.join(".fishmonger.app")],
+				config_lib[app_dir.join(".fishmonger")],
+				config_lib["./.fishmonger"],
+				config_lib["gen"]
+			]
+	print "++++++++"
 
 	return (pconfig_lib, config_lib)
 
-def runCommand(command):
-	pass
-	
-
-def configureStage(config_lib, stage):
+def configureStage(pconfig_lib, config_lib, stage):
 	"""
 	configureStage(confoglib{}, string()) -> config_lib{}
 	"""
 
-	#tool_chains = [tc for (x, tc) in FishTC.Tools.iteritems() if :
+	exclusive_tools = {x : FishTC.Tools[x] for x in FishTC.ExclusiveTools if hasattr(FishTC.Tools[x], stage) and hasattr(getattr(FishTC.Tools[x], stage), "__call__")}
+	inclusive_tools = {x : FishTC.Tools[x] for x in FishTC.InclusiveTools if hasattr(FishTC.Tools[x], stage) and hasattr(getattr(FishTC.Tools[x], stage), "__call__")}
 
+	print "--------"
+	for k in pconfig_lib.keys():
+		print k
+	print "--------"
 
-	return []
+	tools = exclusive_tools.keys() + inclusive_tools.keys()
 
-def runStage(config_lib, stage):
+	external_exclusions   = {}
+	used_config           = {}
+	for tool in tools:
+		t                 = FishTC.Tools[tool]
+		used_config[tool] = {}
+		for app_dir in config_lib["gen"]["app_dirs"]:
+			if app_dir in external_exclusions:
+				continue
+			atc = pconfig_lib[(tool, app_dir)]
+
+			if t.uses(app_dir, atc):
+				if tool in exclusive_tools:
+					external_exclusions[app_dir] = tool
+				used_config[tool][app_dir] = atc
+
+	graph = NX.DiGraph()
+
+	for tool in used_config:
+		for app_dir in used_config[tool]:
+			atc = used_config[tool][app_dir]
+
+			to  = (tool, app_dir)
+
+			"""
+			Add an edge for every tool we build after
+			"""
+			for t in atc.get("build_after_tools", []):
+				[graph.add_edge((t, a), to) for a in used_config[tool]]
+
+			t = tool
+			[graph.add_edge(t, a) for a in atc.get("build_after_apps", []) if a is not app_dir]
+
+	return NX.topological_sort(graph)
+
+def runStage(pconfig_lib, config_lib, stage):
 	"""
 	runStage(ConfigLib(), string()) -> config_lib{}
 	"""
 	PyLog.log(stage.title() + "...")
 	PyLog.increaseIndent()
-	map(runCommand, configureStage(config_lib, stage))
+	map(runCommand, configureStage(pconfig_lib, config_lib, stage))
 	PyLog.decreaseIndent()
+
+def runCommand(command):
+	pass
+	

@@ -11,27 +11,27 @@ import fishmonger.exceptions as FishExc
 ShortNames = {}
 Tools      = {}
 
-ExternalTools = {} ## module() => 1
-InternalTools = {} ## module() => 1
+ExclusiveTools = {} ## module() => 1
+InclusiveTools = {} ## module() => 1
 
 class API():
-		NOT_IMPLEMENTED_OK, NOT_IMPLEMENTED_ERR = range(0,2)
+		NOT_IMPLEMENTED  = range(0,1)
 
 class ToolType:
-	INTERNAL, EXTERNAL = range(0, 2)
+	INCLUSIVE, EXCLUSIVE = range(0, 2)
 
 Provided = [
 	## Erlang Tools
-	("fishmonger.toolchains.edoc",    ToolType.INTERNAL),
-	("fishmonger.toolchains.erlc",    ToolType.INTERNAL),
-	("fishmonger.toolchains.erl_sys", ToolType.INTERNAL),
-	("fishmonger.toolchains.rebar",   ToolType.EXTERNAL),
+	("fishmonger.toolchains.edoc",    ToolType.INCLUSIVE),
+	("fishmonger.toolchains.erlc",    ToolType.INCLUSIVE),
+	("fishmonger.toolchains.erl_sys", ToolType.INCLUSIVE),
+	("fishmonger.toolchains.rebar",   ToolType.EXCLUSIVE),
 
 	## Python Tools
-	("fishmonger.toolchains.python",  ToolType.INTERNAL)
+	("fishmonger.toolchains.python",  ToolType.INCLUSIVE)
 ]
 
-def enable(name, tool_type=ToolType.INTERNAL, ignore_error_on_error=True):
+def enable(name, tool_type=ToolType.INCLUSIVE, ignore_error_on_error=True):
 	try:
 		tool  = getattr(__import__(name, fromlist=["ToolChain"]), "ToolChain")()
 		valid = False
@@ -42,7 +42,7 @@ def enable(name, tool_type=ToolType.INTERNAL, ignore_error_on_error=True):
 					FishCache.setToolVersion(name, tool.version)
 				else:
 					raise FishExc.FishmongerToolchainException("Tools check_sys returns invalid result", tool=name, result=valid)
-		elif tool.check_sys == API.NOT_IMPLEMENTED_OK:
+		elif tool.check_sys == API.NOT_IMPLEMENTED:
 			valid = True
 		else:
 			raise FishExc.FishmongerToolchainException("Invalid value for tool.check_sys", check_sys=tool.check_sys)
@@ -56,10 +56,10 @@ def enable(name, tool_type=ToolType.INTERNAL, ignore_error_on_error=True):
 				PyLog.warning("Tool does not meet system dependencies. Continuing without...", tool=name)
 			raise FishExc.FishmongerToolchainException("Tool does not meet system dependencies.", tool=name)
 
-		if   tool_type == ToolType.INTERNAL:
-			InternalTools[name] = 1
-		elif tool_type == ToolType.EXTERNAL:
-			ExternalTools[name] = 1
+		if   tool_type == ToolType.INCLUSIVE:
+			InclusiveTools[name] = 1
+		elif tool_type == ToolType.EXCLUSIVE:
+			ExclusiveTools[name] = 1
 		else:
 			raise FishExc.FishmongerToolchainException("Invalid tool type given", tool_type=tool_type)
 		return
@@ -151,7 +151,7 @@ class ToolChain():
 
 	Validates system components exist
 	"""
-	check_sys = API.NOT_IMPLEMENTED_OK
+	check_sys = API.NOT_IMPLEMENTED
 
 	"""
 	Clean
@@ -159,7 +159,7 @@ class ToolChain():
 
 	Cleans this build stage.
 	"""
-	clean = API.NOT_IMPLEMENTED_OK
+	clean = API.NOT_IMPLEMENTED
 
 	"""
 	Generate
@@ -167,7 +167,7 @@ class ToolChain():
 
 	Returns the list of commands() that must be run to generate code for the application.
 	"""
-	generate = API.NOT_IMPLEMENTED_OK
+	generate = API.NOT_IMPLEMENTED
 
 	"""
 	Build
@@ -175,7 +175,7 @@ class ToolChain():
 
 	Returns the list of commands() that must be run to build the application.
 	"""
-	build = API.NOT_IMPLEMENTED_OK
+	build = API.NOT_IMPLEMENTED
 
 	"""
 	Link
@@ -183,7 +183,7 @@ class ToolChain():
 
 	Returns the list of commands() that must be run to link the application.
 	"""
-	link = API.NOT_IMPLEMENTED_OK
+	link = API.NOT_IMPLEMENTED
 
 	"""
 	Install
@@ -191,7 +191,7 @@ class ToolChain():
 
 	Returns the list of commands() that must be run to install the application.
 	"""
-	install = API.NOT_IMPLEMENTED_ERR
+	install = API.NOT_IMPLEMENTED
 
 	"""
 	Document
@@ -199,7 +199,7 @@ class ToolChain():
 
 	Returns the list of commands() that must be run to document the application.
 	"""
-	document = API.NOT_IMPLEMENTED_OK
+	document = API.NOT_IMPLEMENTED
 
 	"""
 	Package
@@ -207,7 +207,7 @@ class ToolChain():
 
 	Returns the list of commands() that must be run to package the application.
 	"""
-	package = API.NOT_IMPLEMENTED_OK
+	package = API.NOT_IMPLEMENTED
 
 	"""
 	Publish
@@ -215,4 +215,4 @@ class ToolChain():
 
 	Returns the list of commands() that must be run to publish the application.
 	"""
-	publish = API.NOT_IMPLEMENTED_OK
+	publish = API.NOT_IMPLEMENTED

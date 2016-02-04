@@ -94,3 +94,6 @@ class ToolChain(fishmonger.toolchains.ToolChain):
 		file.close()
 
 		PySH.cmd("chmod a+x %s" % file_name)
+
+	def install(self):
+		pass

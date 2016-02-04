@@ -6,7 +6,6 @@ import signal
 import functools
 import itertools
 
-
 ## Fishmonger modules included
 import fishmonger
 import fishmonger.config     as FishConfig
@@ -72,11 +71,12 @@ def main():
 
 	config_lib   = FishConfig.ConfigLib(config_types)
 	pconfig_lib  = FishConfig.PriorityConfigLib(config_types)
+	config_lib["gen"]           = {}
 	config_lib["cli"]           = FishConfig.Config.Sources.CLI
 	config_lib["env"]           = FishConfig.Config.Sources.ENV
 	config_lib["./.fishmonger"] = ".fishmonger" if os.path.isfile(".fishmonger") else {}
 	
-	pconfig_lib["system"]       = [config_lib["cli"], config_lib["env"], config_lib["./.fishmonger"]]
+	pconfig_lib["system"]       = [config_lib["cli"], config_lib["env"], config_lib["./.fishmonger"], config_lib["gen"]]
 
 	config       = pconfig_lib["system"]
 
@@ -84,8 +84,8 @@ def main():
 
 	fishmonger.toolchains.init()
 	extra_tools  = [
-		(FishTC.ToolType.EXTERNAL, config.get("external_tool", [], single_as_list=True)),
-		(FishTC.ToolType.INTERNAL, config.get("internal_tool", [], single_as_list=True))
+		(FishTC.ToolType.EXCLUSIVE, config.get("exclusive_tool", [], single_as_list=True)),
+		(FishTC.ToolType.INCLUSIVE, config.get("inclusive_tool", [], single_as_list=True))
 	]
 	[FishTC.enable(tool_name, tool_type, ignore_error_on_error=config.get("allow_invalid_tools", True)) for (tool_type, tool_names) in extra_tools for tool_name in tool_names]
 
@@ -96,8 +96,10 @@ def main():
 		x += 1
 	#try:
 	PyLog.log("Configuring...")
-	config_lib = fishmonger.configure(pconfig_lib, config_lib)
-	reduce(fishmonger.runStage, [stage for stage in fishmonger.Stages if fishmonger.StageSynonyms[stage] & commands != set()], config_lib)
+	(pconfig_lib, config_lib) = fishmonger.configure(pconfig_lib, config_lib)
+
+	run_stage_fun = functools.partial(fishmonger.runStage, pconfig_lib, config_lib)
+	map(run_stage_fun, [stage for stage in fishmonger.Stages if fishmonger.StageSynonyms[stage] & commands != set()])
 	#except Exception as e:
 	#	print e
 main()
