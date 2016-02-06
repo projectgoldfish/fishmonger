@@ -64,11 +64,11 @@ def enable(name, tool_type=ToolType.INCLUSIVE, ignore_error_on_error=True):
 			raise FishExc.FishmongerToolchainException("Invalid tool type given", tool_type=tool_type)
 		return
 	except AttributeError as e:
-		#PyLog.error("Error loading module", module=name, error=e)
+		PyLog.error("Error loading module", module=name, error=e)
 		if not ignore_error_on_error:
 			raise e
 	except ImportError as e:
-		#PyLog.error("Error importing module", module=name)
+		PyLog.error("Error importing module", module=name)
 		if not ignore_error_on_error:
 			raise e
 	PyLog.warning("Continuing without toolchain", name)
@@ -96,8 +96,7 @@ def init():
 	map(lambda x: enable(*x), Provided)
 
 class ToolChain():
-	
-	def srcExts():
+	def srcExts(self):
 		"""
 		Source Extensions
 		srcExts() -> [string()]
@@ -106,16 +105,19 @@ class ToolChain():
 
 		This function MUST be implemented.
 		"""
-		return []
+		raise FishExc.FishmongerToolchainException("Toolchain must define srcExts/1", toolchain=self)
 
-	def uses(config):
+	def uses(self, app_dir, config):
 		"""
 		Uses
 		uses(string()) -> boolean
 
 		Determines if the tool chain should act on the proposed configuration.
 		"""
-		return len(PyFind.findAllByExtensions(self.srcExts(), config.root)) == 0
+
+		src_exts = self.srcExts()
+		pattern  = reduce(lambda acc, ext: acc + "|." + ext, src_exts[1:], "." + src_exts[0])
+		return len(app_dir.find(pattern=pattern)) == 0
 
 	def configure(config):
 		"""

@@ -204,21 +204,28 @@ def configureStage(pconfig_lib, config_lib, stage):
 
 	tools = exclusive_tools.keys() + inclusive_tools.keys()
 
+	print tools
+
 	external_exclusions   = {}
 	used_config           = {}
 	for tool in tools:
 		t                 = FishTC.Tools[tool]
 		used_config[tool] = {}
+		print t
 		for app_dir in config_lib["gen"]["app_dirs"]:
+			print "Check", t, app_dir
 			if app_dir in external_exclusions:
 				continue
 			atc = pconfig_lib[(tool, app_dir)]
+
+			print "Tool", t
 
 			if t.uses(app_dir, atc):
 				if tool in exclusive_tools:
 					external_exclusions[app_dir] = tool
 				used_config[tool][app_dir] = atc
 
+	print used_config
 	graph = NX.DiGraph()
 
 	for tool in used_config:
@@ -236,6 +243,7 @@ def configureStage(pconfig_lib, config_lib, stage):
 			t = tool
 			[graph.add_edge(t, a) for a in atc.get("build_after_apps", []) if a is not app_dir]
 
+	print "Order",  NX.topological_sort(graph)
 	return NX.topological_sort(graph)
 
 def runStage(pconfig_lib, config_lib, stage):
