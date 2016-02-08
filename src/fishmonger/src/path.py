@@ -6,11 +6,8 @@ import fnmatch as FNMatch
 
 import shutil
 
-## RlesZilm Imports
-import pybase.exception as PyExcept
-
-class PathException(PyExcept.BaseException):
-	pass
+## Fishmonger Imports
+import fishmonger.exceptions as FishExc
 
 class Path():
 	def __init__(self, *path, **kwargs):
@@ -19,10 +16,16 @@ class Path():
 		elif len(path) > 1:
 			path = OSP.join(*[str(x) for x in path])
 		else:
-			raise PathException("Path must be supplied")
+			raise FishExc.FishmongerPathException("Path must be supplied")
 
 		path = path if not isinstance(path, Path) else path._path
 		self._path = OSP.abspath(path)
+
+	def __add__(self, path):
+		return self.join(path)
+
+	def __radd__(self, other):
+		return other + self._path
 
 	def __get__(self, index):
 		return self._path[index]
@@ -60,10 +63,10 @@ class Path():
 		return OSP.isdir(self._path)
 
 	def basename(self):
-		return Path(OSP.basename(self._path))
+		return OSP.basename(self._path)
 
 	def dirname(self):
-		return Path(OSP.dirname(self._path))
+		return OSP.dirname(self._path)
 
 	def join(self, *others):
 		return Path(OSP.join(self._path, *[str(x) for x in others]))
@@ -73,55 +76,57 @@ class Path():
 	def _mkdirDir(self):
 		return
 	def _mkdirFile(self):
-		raise PathException("File exists, cannot create directory", filename=self._path)
+		raise FishExc.FishmongerPathException("File exists, cannot create directory", filename=self._path)
 	def _mkdirNone(self):
 		OS.makedirs(self._path)
 
 	def open(self, permissions):
 		return self._action(self._openDir, self._openFile, self._openNone, permissions)
 	def _openDir(self, *args):
-		raise PathException("Cannot open directory")
+		raise FishExc.FishmongerPathException("Cannot open directory")
 	def _openFile(self, permissions):
 		return open(self._path, permissions)
 	def _openNone(self, permissions):
 		if "w" in permissions or "a" in permissions:
 			return open(self._path, permissions)
 		else:
-			raise PathException("No file to open", filename=self._path)
+			raise FishExc.FishmongerPathException("No file to open", filename=self._path)
 
-	def copy(self, target):
-		self._action(self._copyDir, self._copyFile, self._copyNone, Path(target))
-	def _copyDir(self, target):
+	def copy(self, target, pattern="*", copy_hidden=False):
+		self._action(self._copyDir, self._copyFile, self._copyNone, Path(target), pattern=pattern, copy_hidden=copy_hidden)
+	def _copyDir(self, target, pattern="*", copy_hidden=False):
 		target = str(target)
-
 		for (root, t_dirs, t_files) in OS.walk(self._path):
 			if target == OSP.commonprefix([root, target]):
 				continue
 
 			for t_dir in t_dirs:
+				if not copy_hidden and t_dir[0] == ".":
+					continue
 				s_path = Path(root, t_dir)
 				if s_path == target:
 					continue
-				t_path = Path(target, OSP.relpath(str(s_path), str(self)))
-				t_path.mkdir()
-
+				
 			for t_file in t_files:
 				s_path = Path(root, t_file)
-				t_path = Path(target, OSP.relpath(str(s_path), str(self)))
-				s_path.copy(t_path)
-	def _copyFile(self, target):
-		target.dirname().mkdir()
+				if FNMatch.fnmatch(str(s_path), pattern):
+					t_path = Path(target, OSP.relpath(str(s_path), str(self)))
+					s_path.copy(t_path, pattern=pattern)
+	def _copyFile(self, target, copy_hidden=False, **kwargs):
+		if not copy_hidden and self._path[0] == ".":
+			return
+		Path(target.dirname()).mkdir()
 		target = str(target)
 		shutil.copy(self._path, target)
-	def _copyNone(self, target):
-		raise PathException("Cannot copy from nonexistant source", source=self._path)
+	def _copyNone(self, target, **kwargs):
+		raise FishExc.FishmongerPathException("Cannot copy from nonexistant source", source=self._path)
 
 	def mv(self, target):
 		self._action(self._mv, self._mv, self._mvNone, Path(target))
 	def _mv(self, target):
 		shutil.move(self._path, target)
 	def _mvNone(self, target):
-		raise PathException("Cannot mv nonexistant source", source=self._path)
+		raise FishExc.FishmongerPathException("Cannot mv nonexistant source", source=self._path)
 
 	def rm(self):
 		self._action(self._rmDir, self.rmFile, self.rmNone)
@@ -130,7 +135,7 @@ class Path():
 	def _rmFile(self):
 		shutil.rm2(self._path, target)
 	def _rmNone(self):
-		raise PathException("Cannot rm nonexistant source", source=self._path)
+		raise FishExc.FishmongerPathException("Cannot rm nonexistant source", source=self._path)
 
 	def ls(self, pattern="*"):
 		return self._action(self._lsDir, self._lsFile, self._lsNone, pattern=pattern)

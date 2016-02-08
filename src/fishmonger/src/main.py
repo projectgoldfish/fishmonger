@@ -8,6 +8,7 @@ import itertools
 
 ## Fishmonger modules included
 import fishmonger
+import fishmonger.path       as FishPath
 import fishmonger.config     as FishConfig
 import fishmonger.exceptions as FishExc
 import fishmonger.toolchains as FishTC
@@ -66,7 +67,9 @@ def main():
 		"allow_invalid_tools" : toBool,
 		"log_level"           : int,
 		"skip_dep_update"     : toBool,
-		"max_cores"           : int
+		"max_cores"           : int,
+		"build_dir"           : FishPath.Path,
+		"install_dir"         : FishPath.Path
 	}
 
 	config_lib   = FishConfig.ConfigLib(config_types)
@@ -75,9 +78,13 @@ def main():
 	config_lib["cli"]           = FishConfig.Config.Sources.CLI
 	config_lib["env"]           = FishConfig.Config.Sources.ENV
 	config_lib["./.fishmonger"] = ".fishmonger" if os.path.isfile(".fishmonger") else {}
-	
-	pconfig_lib["system"]       = [config_lib["cli"], config_lib["env"], config_lib["./.fishmonger"], config_lib["gen"]]
 
+	config_lib["defaults"]                = {}
+	config_lib["defaults"]["build_dir"]   = "build"
+	config_lib["defaults"]["install_dir"] = "install"
+
+	pconfig_lib["system"]                 = [config_lib["cli"], config_lib["env"], config_lib["./.fishmonger"], config_lib["gen"], config_lib["defaults"]]
+	
 	config       = pconfig_lib["system"]
 
 	PyLog.setLogLevel(config.get("log_level", 0))
@@ -94,12 +101,15 @@ def main():
 	while x in config:
 		commands |= set([config[x].lower()])
 		x += 1
-	#try:
-	PyLog.log("Configuring...")
-	(pconfig_lib, config_lib) = fishmonger.configure(pconfig_lib, config_lib)
-
-	run_stage_fun = functools.partial(fishmonger.runStage, pconfig_lib, config_lib)
-	map(run_stage_fun, [stage for stage in fishmonger.Stages if fishmonger.StageSynonyms[stage] & commands != set()])
-	#except Exception as e:
-	#	print e
+	try:
+		PyLog.log("Configuring...")
+		PyLog.increaseIndent()
+		(pconfig_lib, config_lib) = fishmonger.configure(pconfig_lib, config_lib)
+		PyLog.decreaseIndent()
+		run_stage_fun = functools.partial(fishmonger.runStage, pconfig_lib, config_lib)
+		map(run_stage_fun, [stage for stage in fishmonger.Stages if fishmonger.StageSynonyms[stage] & commands != set()])
+	except FishExc.FishmongerException as e:
+		PyLog.error(e)
+	except Exception as e:
+		PyLog.error(FishExc.FishmongerException(str(e), trace=sys.exc_info()))
 main()

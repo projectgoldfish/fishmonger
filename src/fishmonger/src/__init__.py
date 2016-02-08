@@ -11,6 +11,7 @@ import networkx as NX
 
 ## RlesZilm imports
 import pyrcs                 as PyRCS
+import pybase.sh             as PySH
 import pybase.log            as PyLog
 
 ## Fishmonger modules included
@@ -24,7 +25,7 @@ import fishmonger.parallel   as FishParallel
 Stages = [
 	"clean",
 	"generate",
-	"build",
+	"compile",
 	"link",
 	"install",
 	"document",
@@ -35,7 +36,7 @@ Stages = [
 StageSynonyms = {
 	"clean"    : set(["clean"]),
 	"generate" : set(["generate"]),
-	"build"    : set(["build", "compile"]),
+	"compile"  : set(["build", "compile"]),
 	"link"     : set(["link"]),
 	"install"  : set(["install"]),
 	"document" : set(["document", "doc"]),
@@ -116,6 +117,13 @@ def getAppDirs(root = "."):
 	root = FishPath.Path(root)
 	tree = reduce(makeAppDirTree, scanSrcDirs(None, root, None), {})
 
+	print "++++++++"
+	for k in tree:
+		print k
+		for x in tree[k]:
+			print "\t", x
+	print "--------"
+
 	app_dirs = []
 	parents  = set(tree.keys())
 	for app_dir in parents:
@@ -133,7 +141,7 @@ def configure(pconfig_lib, config_lib):
 	"""
 	
 	configured      = False
-	config          = FishConfig.PriorityConfig(*[config_lib["cli"], config_lib["env"], config_lib["./.fishmonger"]])
+	config          = pconfig_lib["system"]
 	
 	app_dirs        = getAppDirs()
 	
@@ -172,10 +180,8 @@ def configure(pconfig_lib, config_lib):
 	"""
 	Generate all PriorityConfig
 	"""
-	print "++++++++"
 	for app_dir in app_dirs:
 		for tool in FishTC.Tools.keys():
-			print (tool, app_dir)
 			pconfig_lib[(tool, app_dir)] = [
 				config_lib["cli"],
 				config_lib["env"],
@@ -183,12 +189,12 @@ def configure(pconfig_lib, config_lib):
 				config_lib[app_dir.join(".fishmonger.app")],
 				config_lib[app_dir.join(".fishmonger")],
 				config_lib["./.fishmonger"],
+				config_lib["defaults"],
 				config_lib["gen"]
 			]
-	print "++++++++"
-
 	return (pconfig_lib, config_lib)
 
+import matplotlib.pyplot as plt
 def configureStage(pconfig_lib, config_lib, stage):
 	"""
 	configureStage(confoglib{}, string()) -> config_lib{}
@@ -197,64 +203,94 @@ def configureStage(pconfig_lib, config_lib, stage):
 	exclusive_tools = {x : FishTC.Tools[x] for x in FishTC.ExclusiveTools if hasattr(FishTC.Tools[x], stage) and hasattr(getattr(FishTC.Tools[x], stage), "__call__")}
 	inclusive_tools = {x : FishTC.Tools[x] for x in FishTC.InclusiveTools if hasattr(FishTC.Tools[x], stage) and hasattr(getattr(FishTC.Tools[x], stage), "__call__")}
 
-	print "--------"
-	for k in pconfig_lib.keys():
-		print k
-	print "--------"
-
 	tools = exclusive_tools.keys() + inclusive_tools.keys()
-
-	print tools
 
 	external_exclusions   = {}
 	used_config           = {}
+	dependencies          = {}
 	for tool in tools:
 		t                 = FishTC.Tools[tool]
 		used_config[tool] = {}
-		print t
 		for app_dir in config_lib["gen"]["app_dirs"]:
-			print "Check", t, app_dir
 			if app_dir in external_exclusions:
 				continue
 			atc = pconfig_lib[(tool, app_dir)]
-
-			print "Tool", t
 
 			if t.uses(app_dir, atc):
 				if tool in exclusive_tools:
 					external_exclusions[app_dir] = tool
 				used_config[tool][app_dir] = atc
 
-	print used_config
 	graph = NX.DiGraph()
-
 	for tool in used_config:
 		for app_dir in used_config[tool]:
-			atc = used_config[tool][app_dir]
-
-			to  = (tool, app_dir)
+			atc              = used_config[tool][app_dir]
+			to               = (tool, app_dir)
+			dependencies[to] = set()
 
 			"""
 			Add an edge for every tool we build after
 			"""
 			for t in atc.get("build_after_tools", []):
-				[graph.add_edge((t, a), to) for a in used_config[tool]]
+				dependencies[to] |= set([(t, a) for a in used_config[tool]])
 
-			t = tool
-			[graph.add_edge(t, a) for a in atc.get("build_after_apps", []) if a is not app_dir]
+			t                 = tool
+			dependencies[to] |= set([(t, a) for a in atc.get("build_after_apps", [])])
 
-	print "Order",  NX.topological_sort(graph)
-	return NX.topological_sort(graph)
+			graph.add_node(to)
+			[graph.add_edge(fr, to) for fr in dependencies[to]]
+
+	return [FishParallel.DependentObject(x, list(dependencies[x])) for x in NX.topological_sort(graph)]
 
 def runStage(pconfig_lib, config_lib, stage):
 	"""
 	runStage(ConfigLib(), string()) -> config_lib{}
 	"""
+	config = pconfig_lib["system"]
 	PyLog.log(stage.title() + "...")
 	PyLog.increaseIndent()
-	map(runCommand, configureStage(pconfig_lib, config_lib, stage))
+	runCommandFun = functools.partial(runCommand, pconfig_lib, stage)
+	commands      = configureStage(pconfig_lib, config_lib, stage)
+
+	FishParallel.processObjects(list(commands), runCommandFun, max_cores=config.get("max_cores", None))
 	PyLog.decreaseIndent()
 
-def runCommand(command):
-	pass
+def runCommand(pconfig_lib, stage, command):
+	error = None
+
+	(tool, app_dir) = command
+	PyLog.log(FishTC.ShortNames[tool] + "(" + str(app_dir.basename()) + ")")
+	PyLog.increaseIndent()
+	commands = getattr(FishTC.Tools[tool], stage)(app_dir, pconfig_lib[command])
+
+	try:
+		if commands == None:
+			return
+		elif isinstance(commands, list):
+			for command in commands:
+				if hasattr(command, "__call__"):
+					command()
+				elif isinstance(command, str):
+					result = PySH.cmd(command, stderr=True, stdout=True)
+					if result != 0:
+						raise FishExc.FishmongerToolchainException("Error executing shell command.", code=result, command=command)
+				else:
+					raise FishExc.FishmongerToolchainException("Command is not a function or shell command.", command=command)
+
+		else:
+			raise FishExc.FishmongerToolchainException("Tool stages must return None or a list of functions and shell comamdns to execute.", toolchain=tool, action=stage)
+	except FishExc.FishmongerException as e:
+		error = e
+	except Exception as e:
+		error = FishExc.FishmongerParallelTaskException(str(e), trace=sys.exc_info())
+
+	PyLog.decreaseIndent()
+	if error is not None:
+		raise error
+
+
+
+
+
+
 	

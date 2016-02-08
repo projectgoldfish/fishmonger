@@ -15,16 +15,12 @@ import multiprocessing
 
 ## PyBase modules included
 import pybase.log       as PyLog
-import pybase.exception as PyException
+
+## Fishmonger modules included
+import fishmonger.exceptions as FishExc
 
 shutdown  = multiprocessing.Event()
 processes = {}
-
-class ParallelException(PyException.BaseException):
-	pass
-
-class ParallelTaskException(PyException.BaseException):
-	pass
 
 class DependentObject():
 	def __init__(self, data, dependencies):
@@ -49,19 +45,19 @@ class ParallelTask(multiprocessing.Process):
 
 	def run(self):
 		signal.signal(signal.SIGINT, signal.SIG_IGN)
-
+		
 		res   = None
 		error = None
 		try:
 			res   = self.action(self.data)
-		except PyException.BaseException as e:
+		except FishExc.FishmongerException as e:
 			error = e
 		except Exception as e:
-			error = ParallelTaskException(str(e), trace=sys.exc_info())
+			error = FishExc.FishmongerParallelTaskException(str(e), trace=sys.exc_info())
 		self.reduce_queue.put((self.data, error, res))
 
 	def action(self, object):
-		raise(ParallelTaskException("ParallelTask action not defined"))
+		raise ParallelTaskException("ParallelTask action not defined", trace=sys.exc_info())
 
 def wait():
 	for t in processes:
@@ -97,8 +93,6 @@ def processObjects(objects, action, reducer=None, max_cores=None, acc0=None):
 	reducer          = reducer   if reducer   is not None else defaultReducer
 	max_cores        = max_cores if max_cores is not None else multiprocessing.cpu_count()
 
-	#manager          = multiprocessing.Manager()
-	#result_queue     = manager.Queue()
 	result_queue     = multiprocessing.Queue()
 
 	used_cores       = 0
@@ -117,6 +111,7 @@ def processObjects(objects, action, reducer=None, max_cores=None, acc0=None):
 			"""
 			If we were able to get an object dispatch it.
 			"""
+
 			processes[obj] =  ParallelTask(action, obj, result_queue)
 			processes[obj].start()
 			used_cores += 1
@@ -142,7 +137,7 @@ def processObjects(objects, action, reducer=None, max_cores=None, acc0=None):
 				if processes[t] != None:
 					processes[t].terminate()
 					processes[t].join()
-			raise(error)
+			raise error
 		if reducer != None:
 			acc0 = reducer(res, acc0)
 			
@@ -155,7 +150,8 @@ def processObjects(objects, action, reducer=None, max_cores=None, acc0=None):
 	At this point all objects have been dispatched. Retrieve final calculations, run reduce, return
 	"""
 	while used_cores > 0:
-		(r_obj, error, res) = result_queue.get(block=True, timeout=1000)
+		result = result_queue.get()
+		(r_obj, error, res) = result
 
 		if error != None:
 			"""
@@ -165,7 +161,7 @@ def processObjects(objects, action, reducer=None, max_cores=None, acc0=None):
 				if processes[t] != None and processes[t].is_alive():
 					processes[t].terminate()
 					processes[t].join()
-			raise(error)
+			raise error
 		if reducer != None:
 			acc0 = reducer(res, acc0)
 

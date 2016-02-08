@@ -64,11 +64,11 @@ def enable(name, tool_type=ToolType.INCLUSIVE, ignore_error_on_error=True):
 			raise FishExc.FishmongerToolchainException("Invalid tool type given", tool_type=tool_type)
 		return
 	except AttributeError as e:
-		PyLog.error("Error loading module", module=name, error=e)
+		#PyLog.error("Error loading module", module=name, error=e)
 		if not ignore_error_on_error:
 			raise e
 	except ImportError as e:
-		PyLog.error("Error importing module", module=name)
+		#PyLog.error("Error importing module", module=name)
 		if not ignore_error_on_error:
 			raise e
 	PyLog.warning("Continuing without toolchain", name)
