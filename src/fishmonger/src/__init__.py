@@ -87,21 +87,17 @@ def getAppDirs(root = "."):
 		
 		root     = root if isinstance(root, FishPath.Path) else FishPath.Path(root)
 		app_dirs = app_dirs if app_dirs is not None else []
-		
-		app_dirs.append((parent, root))
 		src_dir  = root.join("src")
-		
-		nparent  = root
-		dirs     = []
 		if src_dir.isdir():
-			dirs = src_dir.find(dirs_only=True)
-		else:
-			nparent = parent
-			dirs    = root.find(dirs_only=True)
-
-		for d in dirs:
-			if d.basename()[0] != ".":
-				scanSrcDirs(nparent, d, app_dirs)
+			"""
+			If we have a src dir we need to look in that 
+			"""
+			app_dirs.append((parent, root))
+			dirs = [x for x in src_dir.ls() if x.isdir()]
+		
+			for d in dirs:
+				if d.basename()[0] != ".":
+					scanSrcDirs(root, d, app_dirs)
 
 		return app_dirs
 
@@ -124,38 +120,27 @@ def getAppDirs(root = "."):
 			print "\t", x
 	print "--------"
 
+	x = 0
 	app_dirs = []
-	parents  = set(tree.keys())
-	for app_dir in parents:
-		if parents & set(tree[app_dir]) == set():
-			app_dirs.append(app_dir)
+	src_dirs = [None]
+	while x < len(src_dirs):
+		src_dir = src_dirs[x]
+
+		if src_dir not in tree:
+			app_dirs.append(src_dir)
+		else:
+			src_dirs += tree[src_dir]
+		x += 1
 	return app_dirs
 
 def dependencyName(spec):
 	(name, url) = spec
 	return PyPath.makeRelative(os.path.join(target, name))
 
-def configure(pconfig_lib, config_lib):
-	"""
-	configure(config_lib{}) -> config_lib{}
-	"""
-	
-	configured      = False
-	config          = pconfig_lib["system"]
-	
-	app_dirs        = getAppDirs()
-	
-	include_dirs    = set()
-	lib_dirs        = set()
-
-	## Get all config files
-	app_dirs        = list(set([FishPath.Path("./")] + app_dirs))
-	retrieveCodeFun = functools.partial(retrieveCode, config.get("dependency_dir", "deps"), skip_update=config.get("skip_dep_update", False))
-	
-	"""
-	Get all config files and checkout all needed code
-	"""
+def getCFGFiles(pconfig_lib, config_lib, include_dirs, lib_dirs, app_dirs):
 	x = 0
+	config          = pconfig_lib["system"]
+	retrieveCodeFun = functools.partial(retrieveCode, config.get("dependency_dir", "deps"), skip_update=config.get("skip_dep_update", False))
 	while x < len(app_dirs): 
 		app_dir          = app_dirs[x]
 		t_dependencies   = set()
@@ -170,8 +155,31 @@ def configure(pconfig_lib, config_lib):
 			dependency_specs = config_lib[cfg_file].get("dependencies", [])
 			t_dependencies  |= set(dependency_specs)
 		
-		[app_dirs.append(dep_dir) for dep_dir in FishParallel.processObjects(list(t_dependencies), retrieveCodeFun, max_cores=config.get("max_cores", None), acc0=[])]
-		x += 1	
+		t_dep_dirs = FishParallel.processObjects(list(t_dependencies), retrieveCodeFun, max_cores=config.get("max_cores", None), acc0=[])
+		for t_dep_dir in t_dep_dirs:
+			app_dirs += getAppDirs(t_dep_dir)
+		x += 1
+	return (config_lib, include_dirs, lib_dirs)
+
+def configure(pconfig_lib, config_lib):
+	"""
+	configure(config_lib{}) -> config_lib{}
+	"""
+	
+	configured      = False
+	config          = pconfig_lib["system"]
+	
+	app_dirs        = getAppDirs()
+	include_dirs    = set()
+	lib_dirs        = set()
+
+	## Get all config files
+	
+	"""
+	Get all config files and checkout all needed code
+	"""
+	(config_lib, include_dirs, lib_dirs) = getCFGFiles(pconfig_lib, config_lib, include_dirs, lib_dirs, [FishPath.Path(".")])
+	(config_lib, include_dirs, lib_dirs) = getCFGFiles(pconfig_lib, config_lib, include_dirs, lib_dirs, app_dirs)
 		
 	config_lib["gen"]["include_dirs"] = list(include_dirs)
 	config_lib["gen"]["lib_dirs"]     = list(lib_dirs)
@@ -192,9 +200,9 @@ def configure(pconfig_lib, config_lib):
 				config_lib["defaults"],
 				config_lib["gen"]
 			]
+
 	return (pconfig_lib, config_lib)
 
-import matplotlib.pyplot as plt
 def configureStage(pconfig_lib, config_lib, stage):
 	"""
 	configureStage(confoglib{}, string()) -> config_lib{}

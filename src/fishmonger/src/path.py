@@ -140,7 +140,7 @@ class Path():
 	def ls(self, pattern="*"):
 		return self._action(self._lsDir, self._lsFile, self._lsNone, pattern=pattern)
 	def _lsDir(self, pattern):
-		return [Path(x) for x in OS.listdir(self._path) if FNMatch.fnmatch(x, pattern)]
+		return [self.join(x) for x in OS.listdir(self._path) if FNMatch.fnmatch(x, pattern)]
 	def _lsFile(self, pattern):
 		return self._matchFiles([self._path], pattern)
 	def _lsNone(self, pattern):
