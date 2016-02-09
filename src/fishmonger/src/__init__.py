@@ -113,12 +113,12 @@ def getAppDirs(root = "."):
 	root = FishPath.Path(root)
 	tree = reduce(makeAppDirTree, scanSrcDirs(None, root, None), {})
 
-	print "++++++++"
-	for k in tree:
-		print k
-		for x in tree[k]:
-			print "\t", x
-	print "--------"
+	#print "++++++++"
+	#for k in tree:
+	#	print k
+	#	for x in tree[k]:
+	#		print "\t", x
+	#print "--------"
 
 	x = 0
 	app_dirs = []
@@ -137,7 +137,7 @@ def dependencyName(spec):
 	(name, url) = spec
 	return PyPath.makeRelative(os.path.join(target, name))
 
-def getCFGFiles(pconfig_lib, config_lib, include_dirs, lib_dirs, app_dirs):
+def getCFGFiles(pconfig_lib, config_lib, app_dirs):
 	x = 0
 	config          = pconfig_lib["system"]
 	retrieveCodeFun = functools.partial(retrieveCode, config.get("dependency_dir", "deps"), skip_update=config.get("skip_dep_update", False))
@@ -145,8 +145,9 @@ def getCFGFiles(pconfig_lib, config_lib, include_dirs, lib_dirs, app_dirs):
 		app_dir          = app_dirs[x]
 		t_dependencies   = set()
 		
-		include_dirs    |= set(app_dir.find(pattern="include", dirs_only=True))
-		lib_dirs        |= set(app_dir.find(pattern="lib",     dirs_only=True))
+		config_lib["gen"]["lib_dirs"]     |= set(app_dir.find(pattern="lib",     dirs_only=True))
+		config_lib["gen"]["include_dirs"] |= set(app_dir.find(pattern="include", dirs_only=True))
+		
 		for ext in ["", "app"] + FishTC.ShortNames.values():
 			ext      = ext if ext is "" else "." + ext
 			cfg_file = app_dir.join(".fishmonger" + ext)
@@ -159,32 +160,27 @@ def getCFGFiles(pconfig_lib, config_lib, include_dirs, lib_dirs, app_dirs):
 		for t_dep_dir in t_dep_dirs:
 			app_dirs += getAppDirs(t_dep_dir)
 		x += 1
-	return (config_lib, include_dirs, lib_dirs)
+	return config_lib
 
 def configure(pconfig_lib, config_lib):
 	"""
 	configure(config_lib{}) -> config_lib{}
 	"""
-	
-	configured      = False
 	config          = pconfig_lib["system"]
-	
 	app_dirs        = getAppDirs()
-	include_dirs    = set()
-	lib_dirs        = set()
-
-	## Get all config files
 	
 	"""
 	Get all config files and checkout all needed code
 	"""
-	(config_lib, include_dirs, lib_dirs) = getCFGFiles(pconfig_lib, config_lib, include_dirs, lib_dirs, [FishPath.Path(".")])
-	(config_lib, include_dirs, lib_dirs) = getCFGFiles(pconfig_lib, config_lib, include_dirs, lib_dirs, app_dirs)
-		
-	config_lib["gen"]["include_dirs"] = list(include_dirs)
-	config_lib["gen"]["lib_dirs"]     = list(lib_dirs)
 	config_lib["gen"]["app_dirs"]     = app_dirs
-
+	config_lib["gen"]["lib_dirs"]     = set()
+	config_lib["gen"]["include_dirs"] = set()
+	config_lib                        = getCFGFiles(pconfig_lib, config_lib, [FishPath.Path(".")])
+	config_lib                        = getCFGFiles(pconfig_lib, config_lib, app_dirs)
+	
+	config_lib["gen"]["lib_dirs"]     = list(config_lib["gen"]["lib_dirs"])	
+	config_lib["gen"]["include_dirs"] = list(config_lib["gen"]["include_dirs"])
+	
 	"""
 	Generate all PriorityConfig
 	"""

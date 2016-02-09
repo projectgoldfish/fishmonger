@@ -22,6 +22,13 @@ import fishmonger.exceptions as FishExc
 shutdown  = multiprocessing.Event()
 processes = {}
 
+def ctrl_c(signal, frame):
+	"""
+	Catch CTRL+C and exit cleanly
+	"""
+	PyLog.log("Exiting on CTRL+C")
+	sys.exit(0)
+
 class DependentObject():
 	def __init__(self, data, dependencies):
 		self.data         = data
@@ -44,7 +51,7 @@ class ParallelTask(multiprocessing.Process):
 		self.reduce_queue = reduce_queue
 
 	def run(self):
-		signal.signal(signal.SIGINT, signal.SIG_IGN)
+		signal.signal(signal.SIGINT, ctrl_c)
 		
 		res   = None
 		error = None

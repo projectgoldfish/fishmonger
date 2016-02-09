@@ -71,6 +71,9 @@ class Path():
 	def join(self, *others):
 		return Path(OSP.join(self._path, *[str(x) for x in others]))
 
+	def stat(src):
+		return OS.stat(self._path)
+
 	def mkdir(self):
 		self._action(self._mkdirDir, self._mkdirFile, self._mkdirNone)
 	def _mkdirDir(self):

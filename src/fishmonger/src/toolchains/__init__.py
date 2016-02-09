@@ -107,6 +107,23 @@ class ToolChain():
 		"""
 		raise FishExc.FishmongerToolchainException("Toolchain must define srcExts/1", toolchain=self)
 
+	def srcFiles(app_dir):
+		pattern  = reduce(lambda acc, ext: acc + "|." + ext, src_exts[1:], "." + src_exts[0])
+		return app_dir.find(pattern=pattern)
+
+	def updatedFiles(self, app_dir, pattern):
+		key         = (self.__class__.__name__, app_dir)
+		src_files   = self.srcFiles(app_dir)
+		cache_files = FishCache.fetch(key, {})
+
+		updated_files = []
+		for f in src_files:
+			m_time = f.stat().st_mtime
+			if f in cache_files and mtime > cache_files[f]:
+				updated_files.append(f)
+		
+		return updated_files
+
 	def uses(self, app_dir, config):
 		"""
 		Uses

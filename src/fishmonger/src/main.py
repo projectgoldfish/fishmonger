@@ -9,6 +9,7 @@ import itertools
 ## Fishmonger modules included
 import fishmonger
 import fishmonger.path       as FishPath
+import fishmonger.cache      as FishCache
 import fishmonger.config     as FishConfig
 import fishmonger.exceptions as FishExc
 import fishmonger.toolchains as FishTC
@@ -31,12 +32,11 @@ def ctrl_c(signal, frame):
 	"""
 	print ""
 	PyLog.log("Exiting on CTRL+C")
-
 	FishParallel.shutdown.set()
-
 	FishParallel.wait()
-
+	FishCache.save()
 	sys.exit(0)
+
 signal.signal(signal.SIGINT, ctrl_c)
 
 def toBool(value):
@@ -112,4 +112,6 @@ def main():
 		PyLog.error(e)
 	except Exception as e:
 		PyLog.error(FishExc.FishmongerException(str(e), trace=sys.exc_info()))
+
+FishCache.init()
 main()
