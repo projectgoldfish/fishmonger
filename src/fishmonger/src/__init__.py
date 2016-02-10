@@ -220,7 +220,7 @@ def configureStage(pconfig_lib, config_lib, stage):
 				continue
 			atc = pconfig_lib[(tool, app_dir)]
 
-			if t.uses(app_dir, atc):
+			if len(t.srcFiles(app_dir, stage)) == 0:
 				if tool in exclusive_tools:
 					external_exclusions[app_dir] = tool
 				used_config[tool][app_dir] = atc
@@ -265,8 +265,18 @@ def runCommand(pconfig_lib, stage, command):
 	(tool, app_dir) = command
 	PyLog.log(FishTC.ShortNames[tool] + "(" + str(app_dir.basename()) + ")")
 	PyLog.increaseIndent()
-	commands = getattr(FishTC.Tools[tool], stage)(app_dir, pconfig_lib[command])
+	
+	src_files = FishTC.Tools[tool].srcFiles(app_dir, stage)
 
+	## TODO:
+	##     Get cache files for tool/stage/appdir
+	##     Get files that are updated
+
+	if len(src_files) == 0:
+		PyLog.log("Up to date...")
+		return 
+
+	commands  = getattr(FishTC.Tools[tool], stage)(app_dir, pconfig_lib[command])
 	try:
 		if commands == None:
 			return
@@ -292,9 +302,6 @@ def runCommand(pconfig_lib, stage, command):
 	if error is not None:
 		raise error
 
-
-
-
-
-
+	## TODO:
+	##     Update src_files in cache
 	

@@ -96,7 +96,7 @@ def init():
 	map(lambda x: enable(*x), Provided)
 
 class ToolChain():
-	def srcExts(self):
+	def srcExts(self, stage):
 		"""
 		Source Extensions
 		srcExts() -> [string()]
@@ -107,7 +107,10 @@ class ToolChain():
 		"""
 		raise FishExc.FishmongerToolchainException("Toolchain must define srcExts/1", toolchain=self)
 
-	def srcFiles(app_dir):
+	def srcFiles(self, app_dir, stage):
+		src_exts = self.srcExts(stage)
+		if len(src_exts) == 0:
+			return []
 		pattern  = reduce(lambda acc, ext: acc + "|." + ext, src_exts[1:], "." + src_exts[0])
 		return app_dir.find(pattern=pattern)
 
@@ -123,18 +126,6 @@ class ToolChain():
 				updated_files.append(f)
 		
 		return updated_files
-
-	def uses(self, app_dir, config):
-		"""
-		Uses
-		uses(string()) -> boolean
-
-		Determines if the tool chain should act on the proposed configuration.
-		"""
-
-		src_exts = self.srcExts()
-		pattern  = reduce(lambda acc, ext: acc + "|." + ext, src_exts[1:], "." + src_exts[0])
-		return len(app_dir.find(pattern=pattern)) == 0
 
 	def configure(config):
 		"""
