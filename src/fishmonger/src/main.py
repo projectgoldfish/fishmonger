@@ -115,3 +115,4 @@ def main():
 
 FishCache.init()
 main()
+FishCache.save()

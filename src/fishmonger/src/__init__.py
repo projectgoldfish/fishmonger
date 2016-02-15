@@ -266,11 +266,13 @@ def runCommand(pconfig_lib, stage, command):
 	PyLog.log(FishTC.ShortNames[tool] + "(" + str(app_dir.basename()) + ")")
 	PyLog.increaseIndent()
 	
-	src_files = FishTC.Tools[tool].srcFiles(app_dir, stage)
+	src_files     = FishTC.Tools[tool].srcFiles(app_dir, stage)
+	cache_files   = FishCache.fetch((stage, command), {})
+	for src_file in src_files:
+		if src_file in cache_files and src_file.stat().st_mtime <= cache_files[src_file]:
+			continue
+		updated_files.append(src_file)
 
-	## TODO:
-	##     Get cache files for tool/stage/appdir
-	##     Get files that are updated
 
 	if len(src_files) == 0:
 		PyLog.log("Up to date...")
@@ -304,4 +306,7 @@ def runCommand(pconfig_lib, stage, command):
 
 	## TODO:
 	##     Update src_files in cache
-	
+	for updated_file in updated_files:
+		cache_files[updated_file] = updated_files.stat().st_mtime
+
+	FishCache.store((stage, command), cache_files)
