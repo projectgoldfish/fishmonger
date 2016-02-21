@@ -51,8 +51,6 @@ class ParallelTask(multiprocessing.Process):
 		self.reduce_queue = reduce_queue
 
 	def run(self):
-		signal.signal(signal.SIGINT, ctrl_c)
-		
 		res   = None
 		error = None
 		try:

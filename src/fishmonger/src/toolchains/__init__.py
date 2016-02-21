@@ -35,14 +35,16 @@ def enable(name, tool_type=ToolType.INCLUSIVE, ignore_error_on_error=True):
 	try:
 		tool  = getattr(__import__(name, fromlist=["ToolChain"]), "ToolChain")()
 		valid = False
-		if hasattr(tool.check_sys, "__call__"):
-			if FishCache.getToolVersion(name) != tool.version:
-				valid = tool.check_sys()
-				if isinstance(valid, bool):
-					FishCache.setToolVersion(name, tool.version)
+		if hasattr(tool.checkSys, "__call__"):
+			key           = (name, tool.version())
+			valid_version = FishCache.fetch(key, None)
+			if valid_version != True:
+				valid = tool.checkSys()
+				if valid == True:
+					FishCache.store(key, True)
 				else:
-					raise FishExc.FishmongerToolchainException("Tools check_sys returns invalid result", tool=name, result=valid)
-		elif tool.check_sys == API.NOT_IMPLEMENTED:
+					raise FishExc.FishmongerToolchainException("System does not meet tool requirements.", tool=name, reason=valid)
+		elif tool.checkSys == API.NOT_IMPLEMENTED:
 			valid = True
 		else:
 			raise FishExc.FishmongerToolchainException("Invalid value for tool.check_sys", check_sys=tool.check_sys)
@@ -64,11 +66,11 @@ def enable(name, tool_type=ToolType.INCLUSIVE, ignore_error_on_error=True):
 			raise FishExc.FishmongerToolchainException("Invalid tool type given", tool_type=tool_type)
 		return
 	except AttributeError as e:
-		#PyLog.error("Error loading module", module=name, error=e)
+		PyLog.error("Error loading module", module=name, error=e)
 		if not ignore_error_on_error:
 			raise e
 	except ImportError as e:
-		#PyLog.error("Error importing module", module=name)
+		PyLog.error("Error importing module", module=name)
 		if not ignore_error_on_error:
 			raise e
 	PyLog.warning("Continuing without toolchain", name)
@@ -96,7 +98,7 @@ def init():
 	map(lambda x: enable(*x), Provided)
 
 class ToolChain():
-	def srcExts(self, stage):
+	def exts(self):
 		"""
 		Source Extensions
 		srcExts() -> [string()]
@@ -105,27 +107,20 @@ class ToolChain():
 
 		This function MUST be implemented.
 		"""
-		raise FishExc.FishmongerToolchainException("Toolchain must define srcExts/1", toolchain=self)
+		raise FishExc.FishmongerToolchainException("Toolchain must define exts/1", toolchain=self)
 
-	def srcFiles(self, app_dir, stage):
-		src_exts = self.srcExts(stage)
-		if len(src_exts) == 0:
+	def _usedFiles(self, app_dir, exts):
+		if len(exts) == 0:
 			return []
-		pattern  = reduce(lambda acc, ext: acc + "|." + ext, src_exts[1:], "." + src_exts[0])
+		pattern  = reduce(lambda acc, ext: acc + ["*." + ext], exts[1:], "*." + exts[0])
 		return app_dir.find(pattern=pattern)
 
-	def updatedFiles(self, app_dir, pattern):
-		key         = (self.__class__.__name__, app_dir)
-		src_files   = self.srcFiles(app_dir)
-		cache_files = FishCache.fetch(key, {})
+	def appFiles(self, app_dir):
+		exts = reduce(lambda acc, exts: acc + exts, self.exts().values())
+		return self._usedFiles(app_dir, exts)
 
-		updated_files = []
-		for f in src_files:
-			m_time = f.stat().st_mtime
-			if f in cache_files and mtime > cache_files[f]:
-				updated_files.append(f)
-		
-		return updated_files
+	def stageFiles(self, app_dir, config, stage):
+		return self._usedFiles(app_dir, self.exts().get(stage, []))	
 
 	def configure(config):
 		"""
@@ -146,6 +141,9 @@ class ToolChain():
 		"""
 		return []
 
+	def langlibFile(self, app_dir, app_file, language, stage_dir):
+		return app_dir.langlib(language, stage_dir).join(app_file.relative(app_dir.join("src")))
+
 	"""
 	Version
 	version - integer()
@@ -161,7 +159,7 @@ class ToolChain():
 
 	Validates system components exist
 	"""
-	check_sys = API.NOT_IMPLEMENTED
+	checkSys = API.NOT_IMPLEMENTED
 
 	"""
 	Clean
@@ -177,7 +175,8 @@ class ToolChain():
 
 	Returns the list of commands() that must be run to generate code for the application.
 	"""
-	generate = API.NOT_IMPLEMENTED
+	generate      = API.NOT_IMPLEMENTED
+	generateFiles = API.NOT_IMPLEMENTED
 
 	"""
 	Build
@@ -185,7 +184,8 @@ class ToolChain():
 
 	Returns the list of commands() that must be run to build the application.
 	"""
-	build = API.NOT_IMPLEMENTED
+	build      = API.NOT_IMPLEMENTED
+	buildFiles = API.NOT_IMPLEMENTED
 
 	"""
 	Link
@@ -193,7 +193,8 @@ class ToolChain():
 
 	Returns the list of commands() that must be run to link the application.
 	"""
-	link = API.NOT_IMPLEMENTED
+	link      = API.NOT_IMPLEMENTED
+	linkFiles = API.NOT_IMPLEMENTED
 
 	"""
 	Install
@@ -201,7 +202,8 @@ class ToolChain():
 
 	Returns the list of commands() that must be run to install the application.
 	"""
-	install = API.NOT_IMPLEMENTED
+	install      = API.NOT_IMPLEMENTED
+	installFiles = API.NOT_IMPLEMENTED
 
 	"""
 	Document
@@ -209,7 +211,8 @@ class ToolChain():
 
 	Returns the list of commands() that must be run to document the application.
 	"""
-	document = API.NOT_IMPLEMENTED
+	document      = API.NOT_IMPLEMENTED
+	documentFiles = API.NOT_IMPLEMENTED
 
 	"""
 	Package
@@ -217,7 +220,8 @@ class ToolChain():
 
 	Returns the list of commands() that must be run to package the application.
 	"""
-	package = API.NOT_IMPLEMENTED
+	package      = API.NOT_IMPLEMENTED
+	packageFiles = API.NOT_IMPLEMENTED
 
 	"""
 	Publish
@@ -225,4 +229,5 @@ class ToolChain():
 
 	Returns the list of commands() that must be run to publish the application.
 	"""
-	publish = API.NOT_IMPLEMENTED
+	publish      = API.NOT_IMPLEMENTED
+	publishFiles = API.NOT_IMPLEMENTED

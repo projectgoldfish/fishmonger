@@ -25,7 +25,7 @@ import fishmonger.parallel   as FishParallel
 Stages = [
 	"clean",
 	"generate",
-	"compile",
+	"build",
 	"link",
 	"install",
 	"document",
@@ -36,7 +36,7 @@ Stages = [
 StageSynonyms = {
 	"clean"    : set(["clean"]),
 	"generate" : set(["generate"]),
-	"compile"  : set(["build", "compile"]),
+	"build"    : set(["build", "compile"]),
 	"link"     : set(["link"]),
 	"install"  : set(["install"]),
 	"document" : set(["document", "doc"]),
@@ -50,7 +50,7 @@ UpdatedRepos  = Manager.dict()
 def retrieveCode(target, spec, skip_update=False):
 	target      = target if isinstance(target, FishPath.Path) else FishPath.Path(target)
 	(name, url) = spec
-	target_dir  = target.join(name).relative()
+	target_dir  = target.join(name)
 	
 	if name not in UpdatedRepos:
 		UpdatedRepos[name] = True
@@ -112,13 +112,6 @@ def getAppDirs(root = "."):
 
 	root = FishPath.Path(root)
 	tree = reduce(makeAppDirTree, scanSrcDirs(None, root, None), {})
-
-	#print "++++++++"
-	#for k in tree:
-	#	print k
-	#	for x in tree[k]:
-	#		print "\t", x
-	#print "--------"
 
 	x = 0
 	app_dirs = []
@@ -206,8 +199,7 @@ def configureStage(pconfig_lib, config_lib, stage):
 
 	exclusive_tools = {x : FishTC.Tools[x] for x in FishTC.ExclusiveTools if hasattr(FishTC.Tools[x], stage) and hasattr(getattr(FishTC.Tools[x], stage), "__call__")}
 	inclusive_tools = {x : FishTC.Tools[x] for x in FishTC.InclusiveTools if hasattr(FishTC.Tools[x], stage) and hasattr(getattr(FishTC.Tools[x], stage), "__call__")}
-
-	tools = exclusive_tools.keys() + inclusive_tools.keys()
+	tools           = exclusive_tools.keys() + inclusive_tools.keys()
 
 	external_exclusions   = {}
 	used_config           = {}
@@ -218,11 +210,13 @@ def configureStage(pconfig_lib, config_lib, stage):
 		for app_dir in config_lib["gen"]["app_dirs"]:
 			if app_dir in external_exclusions:
 				continue
-			atc = pconfig_lib[(tool, app_dir)]
-
-			if len(t.srcFiles(app_dir, stage)) == 0:
+			
+			atc         = pconfig_lib[(tool, app_dir)]
+			stage_files = _stageFiles(tool, app_dir, atc, stage)
+			if len(stage_files) is not 0:
 				if tool in exclusive_tools:
 					external_exclusions[app_dir] = tool
+				atc["stage_files"]         = stage_files
 				used_config[tool][app_dir] = atc
 
 	graph = NX.DiGraph()
@@ -266,22 +260,24 @@ def runCommand(pconfig_lib, stage, command):
 	PyLog.log(FishTC.ShortNames[tool] + "(" + str(app_dir.basename()) + ")")
 	PyLog.increaseIndent()
 	
-	src_files     = FishTC.Tools[tool].srcFiles(app_dir, stage)
+	atc           = pconfig_lib[command]
 	cache_files   = FishCache.fetch((stage, command), {})
-	for src_file in src_files:
-		if src_file in cache_files and src_file.stat().st_mtime <= cache_files[src_file]:
+	updated_files = []
+	for stage_file in atc["stage_files"]:
+		
+		if stage_file in cache_files and stage_file.stat().st_mtime <= cache_files[stage_file]:
 			continue
-		updated_files.append(src_file)
+		updated_files.append(stage_file)
 
-
-	if len(src_files) == 0:
+	if len(updated_files) == 0:
 		PyLog.log("Up to date...")
-		return 
+		PyLog.decreaseIndent()
+		return
 
-	commands  = getattr(FishTC.Tools[tool], stage)(app_dir, pconfig_lib[command])
+	commands = getattr(FishTC.Tools[tool], stage)(app_dir, pconfig_lib[command], updated_files)
 	try:
 		if commands == None:
-			return
+			pass
 		elif isinstance(commands, list):
 			for command in commands:
 				if hasattr(command, "__call__"):
@@ -292,7 +288,6 @@ def runCommand(pconfig_lib, stage, command):
 						raise FishExc.FishmongerToolchainException("Error executing shell command.", code=result, command=command)
 				else:
 					raise FishExc.FishmongerToolchainException("Command is not a function or shell command.", command=command)
-
 		else:
 			raise FishExc.FishmongerToolchainException("Tool stages must return None or a list of functions and shell comamdns to execute.", toolchain=tool, action=stage)
 	except FishExc.FishmongerException as e:
@@ -305,8 +300,20 @@ def runCommand(pconfig_lib, stage, command):
 		raise error
 
 	## TODO:
-	##     Update src_files in cache
+	##     Update stage_files in cache
 	for updated_file in updated_files:
-		cache_files[updated_file] = updated_files.stat().st_mtime
+		cache_files[updated_file] = updated_file.stat().st_mtime
 
 	FishCache.store((stage, command), cache_files)
+
+def _stageFiles(tool, app_dir, config, stage):
+	stage_files   = []
+	if getattr(FishTC.Tools[tool], stage + "Files") is not FishTC.API.NOT_IMPLEMENTED:
+		stage_files = getattr(FishTC.Tools[tool], stage + "Files")(app_dir, config)
+	else:
+		stage_files = FishTC.Tools[tool].stageFiles(app_dir, config, stage)
+	
+	return stage_files
+
+
+

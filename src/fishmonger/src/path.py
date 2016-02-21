@@ -51,7 +51,7 @@ class Path():
 		return False
 
 	def relative(self, root="."):
-		return Path(OSP.relpath(self._path, root))
+		return OSP.relpath(self._path, str(root))
 
 	def absolute(self):
 		return Path(self._path)
@@ -71,7 +71,7 @@ class Path():
 	def join(self, *others):
 		return Path(OSP.join(self._path, *[str(x) for x in others]))
 
-	def stat(src):
+	def stat(self):
 		return OS.stat(self._path)
 
 	def mkdir(self):
@@ -149,15 +149,21 @@ class Path():
 	def _lsNone(self, pattern):
 		return []
 
+	def langlib(self, language, stage):
+		root = Path(".")
+		return Path(root, stage, "lib", language, "lib", *[x for x in self.relative(root).split("/") if not "src"] + [self.basename()])
+
 	def find(self, **kwargs):
 		return self._action(self._findDir, self._findFile, self._findNone, **kwargs)
 	def _findDir(self, pattern="*", dirs_only=False, files_only=False):
 		found = []
+		if isinstance(pattern, str):
+			pattern = [pattern]
 		for root, t_dirs, t_files in OS.walk(self._path):
 			if not files_only:
-				found += [Path(OSP.join(root, t_d)) for t_d in t_dirs  if t_d[0] != "." and FNMatch.fnmatch(t_d, pattern)]
+				found += [Path(OSP.join(root, t_d)) for t_d in t_dirs  if t_d[0] != "." and reduce(lambda acc, x: acc or FNMatch.fnmatch(t_d, x), pattern, False)]
 			if not dirs_only:
-				found += [Path(OSP.join(root, t_f)) for t_f in t_files if t_f[0] != "." and FNMatch.fnmatch(t_f, pattern)]
+				found += [Path(OSP.join(root, t_f)) for t_f in t_files if t_f[0] != "." and reduce(lambda acc, x: acc or FNMatch.fnmatch(t_f, x), pattern, False)]
 		return found
 	def _findFile(self, pattern="*", **kwargs):
 		return self._matchFiles([self._path], pattern)

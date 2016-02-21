@@ -16,7 +16,7 @@ import fishmonger.toolchains as FishTC
 import fishmonger.parallel   as FishParallel
 
 ## PyBase modules included
-import pybase.log       as PyLog
+import pybase.log            as PyLog
 
 if sys.version_info < (2, 7):
 	"""
@@ -34,7 +34,7 @@ def ctrl_c(signal, frame):
 	PyLog.log("Exiting on CTRL+C")
 	FishParallel.shutdown.set()
 	FishParallel.wait()
-	FishCache.save()
+	FishCache.shutdown()
 	sys.exit(0)
 
 signal.signal(signal.SIGINT, ctrl_c)
@@ -72,20 +72,20 @@ def main():
 		"install_dir"         : FishPath.Path
 	}
 
-	config_lib   = FishConfig.ConfigLib(config_types)
-	pconfig_lib  = FishConfig.PriorityConfigLib(config_types)
+	config_lib                  = FishConfig.ConfigLib(config_types)
 	config_lib["gen"]           = {}
 	config_lib["cli"]           = FishConfig.Config.Sources.CLI
 	config_lib["env"]           = FishConfig.Config.Sources.ENV
 	config_lib["./.fishmonger"] = ".fishmonger" if os.path.isfile(".fishmonger") else {}
 
 	config_lib["defaults"]                = {}
-	config_lib["defaults"]["build_dir"]   = "build"
-	config_lib["defaults"]["install_dir"] = "install"
+	config_lib["defaults"]["build_dir"]   = "_build"
+	config_lib["defaults"]["install_dir"] = "_install"
 
-	pconfig_lib["system"]                 = [config_lib["cli"], config_lib["env"], config_lib["./.fishmonger"], config_lib["gen"], config_lib["defaults"]]
+	pconfig_lib           = FishConfig.PriorityConfigLib(config_types)
+	pconfig_lib["system"] = [config_lib["cli"], config_lib["env"], config_lib["./.fishmonger"], config_lib["gen"], config_lib["defaults"]]
 	
-	config       = pconfig_lib["system"]
+	config                = pconfig_lib["system"]
 
 	PyLog.setLogLevel(config.get("log_level", 0))
 
@@ -115,4 +115,4 @@ def main():
 
 FishCache.init()
 main()
-FishCache.save()
+FishCache.shutdown()
