@@ -231,3 +231,22 @@ class ToolChain():
 	"""
 	publish      = API.NOT_IMPLEMENTED
 	publishFiles = API.NOT_IMPLEMENTED
+
+class LibToolChain(ToolChain):
+	def build(self, app_dir, config, src_files):
+		for f in src_files:
+			print f, "->", self.langlibFile(app_dir, f, "python", config["build_dir"])
+			f.copy(self.langlibFile(app_dir, f, "python", config["build_dir"]))
+		return None
+
+	def installFiles(self, app_dir, config):
+		return self._usedFiles(app_dir.langlib("python", config["build_dir"]), self.exts()["build"])
+
+	def install(self, app_dir, config, src_files):
+		build_dir   = self.langlibFile(app_dir, app_dir, "python", config["build_dir"])
+		install_dir = self.langlibFile(app_dir, app_dir, "python", config["install_dir"])
+		for f in src_files:
+			print f, "->", install_dir.join(f.relative(build_dir))
+		#f.copy(self.langlibFile(app_dir, f, "python", config["install_dir"]))
+		return None	
+
