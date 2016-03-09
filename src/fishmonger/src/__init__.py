@@ -213,6 +213,7 @@ def configureStage(pconfig_lib, config_lib, stage):
 			
 			atc         = pconfig_lib[(tool, app_dir)]
 			stage_files = _stageFiles(tool, app_dir, atc, stage)
+
 			if len(stage_files) is not 0:
 				if tool in exclusive_tools:
 					external_exclusions[app_dir] = tool
@@ -260,11 +261,13 @@ def runCommand(pconfig_lib, stage, command):
 	PyLog.log(FishTC.ShortNames[tool] + "(" + str(app_dir.basename()) + ")")
 	PyLog.increaseIndent()
 	
-	atc           = pconfig_lib[command]
-	cache_files   = FishCache.fetch((stage, command), {})
-	updated_files = []
-	for stage_file in atc["stage_files"]:
-		
+	atc             = pconfig_lib[command]
+	cache_files     = FishCache.fetch((stage, command), {})
+	stage_files     = atc["stage_files"]
+	updated_files   = stage_files["always"]    if isisntance(stage_files, dict) else []
+	transient_files = stage_files["as_needed"] if isinstance(stage_files, dict) else stage_files
+
+	for stage_file in transient_files:
 		if stage_file in cache_files and stage_file.stat().st_mtime <= cache_files[stage_file]:
 			continue
 		updated_files.append(stage_file)

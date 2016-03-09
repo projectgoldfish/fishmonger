@@ -21,6 +21,9 @@ class ToolType:
 	INCLUSIVE, EXCLUSIVE = range(0, 2)
 
 Provided = [
+	## Docker Tools
+	("fishmonger.toolchains.docker",  ToolType.INCLUSIVE),
+
 	## Erlang Tools
 	("fishmonger.toolchains.edoc",    ToolType.INCLUSIVE),
 	("fishmonger.toolchains.erlc",    ToolType.INCLUSIVE),
