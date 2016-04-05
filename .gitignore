@@ -1,7 +1,7 @@
 *.pyc
 py-deps/
 py-libs/*
-install/*
+_install
 deps/*
-build/*
+_build
 .fishmonger.pickle
