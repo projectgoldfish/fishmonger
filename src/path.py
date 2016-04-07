@@ -1,8 +1,9 @@
 ## Python3.4
-import os      as OS
-import os.path as OSP
-import fnmatch as FNMatch
+import os        as OS
+import os.path   as OSP
+import fnmatch   as FNMatch
 import shutil
+import functools 
 ## PIP
 ## Fishmonger
 import fishmonger.exceptions as FishExc
@@ -159,9 +160,9 @@ class Path():
 			pattern = [pattern]
 		for root, t_dirs, t_files in OS.walk(self._path):
 			if not files_only:
-				found += [Path(OSP.join(root, t_d)) for t_d in t_dirs  if t_d[0] != "." and reduce(lambda acc, x: acc or FNMatch.fnmatch(t_d, x), pattern, False)]
+				found += [Path(OSP.join(root, t_d)) for t_d in t_dirs  if t_d[0] != "." and functools.reduce(lambda acc, x: acc or FNMatch.fnmatch(t_d, x), pattern, False)]
 			if not dirs_only:
-				found += [Path(OSP.join(root, t_f)) for t_f in t_files if t_f[0] != "." and reduce(lambda acc, x: acc or FNMatch.fnmatch(t_f, x), pattern, False)]
+				found += [Path(OSP.join(root, t_f)) for t_f in t_files if t_f[0] != "." and functools.reduce(lambda acc, x: acc or FNMatch.fnmatch(t_f, x), pattern, False)]
 		return found
 	def _findFile(self, pattern="*", **kwargs):
 		return self._matchFiles([self._path], pattern)

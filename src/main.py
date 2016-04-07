@@ -105,6 +105,7 @@ def main():
 		FishLog.log("Configuring...")
 		FishLog.increaseIndent()
 		(pconfig_lib, config_lib) = fishmonger.configure(pconfig_lib, config_lib)
+		FishLog.log(pconfig=pconfig_lib.configs, config=config_lib.configs)
 		FishLog.decreaseIndent()
 		run_stage_fun = functools.partial(fishmonger.runStage, pconfig_lib, config_lib)
 		map(run_stage_fun, [stage for stage in fishmonger.Stages if fishmonger.StageSynonyms[stage] & commands != set()])

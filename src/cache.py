@@ -24,7 +24,8 @@ class CacheReducer(multiprocessing.Process):
 
 		self.cache_file = FishPath.Path(".fishmonger.pickle")
 		if self.cache_file.isfile():
-			self.data = pickle.loads(self.cache_file.open("r").read())
+			with self.cache_file.open("rb") as f:
+				self.data = pickle.load(f)
 		else:
 			self.data = {}
 		self.reduce_queue = reduce_queue
@@ -43,9 +44,8 @@ class CacheReducer(multiprocessing.Process):
 		self.save()
 
 	def save(self):
-		h_file = self.cache_file.open("w")
-		h_file.write(pickle.dumps(self.data))
-		h_file.close()
+		with self.cache_file.open("wb") as f:
+			pickle.dump(self.data, f)
 
 	def store(self, key, value):
 		self.data[key] = value
@@ -59,7 +59,8 @@ _CacheFile    = FishPath.Path(".fishmonger.pickle")
 
 _Cache        = {}
 if _CacheFile.isfile():
-	_Cache = pickle.loads(_CacheFile.open("r").read())
+	with _CacheFile.open("rb") as f:
+		_Cache = pickle.load(f)
 
 def init():
 	_CacheReducer.start()

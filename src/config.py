@@ -129,6 +129,9 @@ class Config():
 	def __repr__(self):
 		return json.dumps(self.values)
 
+	def __str__(self):
+		return repr(self)
+
 	def configKey(self, key):
 		return key.lower() if isinstance(key, str) else key
 
@@ -210,4 +213,3 @@ class PriorityConfigLib(ConfigLib):
 			if not isinstance(sources, list):
 				sources = [sources]
 			self.configs[key] = PriorityConfig(*sources, types=self.types)
-

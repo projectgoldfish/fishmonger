@@ -17,12 +17,12 @@ RUN pip install networkx
 RUN pip install GitPython
 
 COPY src /opt/fishmonger/src
+VOLUME /opt/fishmonger/src
 WORKDIR /usr/lib/python3.4/site-packages
 RUN ln -s /opt/fishmonger/src fishmonger
 
-RUN mkdir /src/fishmonger
+RUN mkdir -p /src/fishmonger
 VOLUME    /src/fishmonger
 WORKDIR   /src/fishmonger
 
-ENTRYPOINT ["python", "-m", "fishmonger.main"]
-CMD ["--help"]
+CMD ["bash"]

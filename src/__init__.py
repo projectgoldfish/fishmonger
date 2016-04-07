@@ -106,7 +106,7 @@ def getAppDirs(root = "."):
 		return acc
 
 	root = FishPath.Path(root)
-	tree = reduce(makeAppDirTree, scanSrcDirs(None, root, None), {})
+	tree = functools.reduce(makeAppDirTree, scanSrcDirs(None, root, None), {})
 
 	x = 0
 	app_dirs = []
@@ -136,7 +136,7 @@ def getCFGFiles(pconfig_lib, config_lib, app_dirs):
 		config_lib["gen"]["lib_dirs"]     |= set(app_dir.find(pattern="lib",     dirs_only=True))
 		config_lib["gen"]["include_dirs"] |= set(app_dir.find(pattern="include", dirs_only=True))
 		
-		for ext in ["", "app"] + FishTC.ShortNames.values():
+		for ext in ["", "app"] + list(FishTC.ShortNames.values()):
 			ext      = ext if ext is "" else "." + ext
 			cfg_file = app_dir.join(".fishmonger" + ext)
 			config_lib[cfg_file] = cfg_file if cfg_file.isfile() else {}

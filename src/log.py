@@ -5,26 +5,17 @@ import sys
 import inspect
 
 Indent   = ""
-LogLevel = 3
+LogLevel = 99
 
 def formatMsg(log_msg="", *args, **kwargs):
 	seperator = ": "
 	msg_args  = ""
-	for arg in args:
-		if msg_args == "":
-			msg_args = str(arg)
-		else:
-			msg_args += ", " + str(arg)
+	args   = [str(x) for x in args]
+	kwargs = ["{0}={1}".format(k, str(kwargs[k])) for k in kwargs]
 
-	for kwarg in kwargs:
-		if msg_args == "":
-			msg_args  = kwarg
-		else:
-			msg_args += ", " + kwarg
-		msg_args += "="
-		msg_args += str(kwargs[kwarg])
+	msg_args = ", ".join(args) + ", " + ", ".join(kwargs)
 		
-	if msg_args == "":
+	if msg_args == "" or log_msg == "":
 		seperator = ""
 	return str(log_msg) + seperator + msg_args
 
